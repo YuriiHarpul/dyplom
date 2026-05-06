@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id      String   @id @default(uuid())
+  name    String
+  group   String?
+  course  String?
+  project Project?
+}
+
+model Teacher {
+  id       String    @id @default(uuid())
+  name     String
+  projects Project[]
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("В процесі")
+  semester    String?
+
+  studentId   String   @unique
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

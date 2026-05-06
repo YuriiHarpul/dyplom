@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id      String   @id @default(uuid())
+  name    String   // ПІБ студента
+  group   String?  // Група (опціонально)
+  course  String?  // Курс студента
+  project Project?
+}
+
+model Teacher {
+  id       String    @id @default(uuid())
+  name     String    // ПІБ викладача/керівника
+  projects Project[] // Проєкти, якими керує
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  title       String   // Тема дипломного проєкту
+  description String?  // Додаткова інформація
+  status      String   @default("В процесі") // Статус (напр. Захищено, В процесі)
+  semester    String?  // Семестр/дисципліна (назва аркуша Excel)
+  
+  studentId   String   @unique
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
