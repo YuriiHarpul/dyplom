@@ -55,20 +55,22 @@ export class UploadService {
                 if (studentName.length < 5 || studentName.split(' ').length < 2) continue;
 
                 // 1. Знайти або створити студента
-                let student = await this.prisma.student.findFirst({ where: { name: studentName } });
+                let student = await this.prisma.user.findFirst({ where: { name: studentName, role: 'STUDENT' } });
                 if (!student) {
-                    student = await this.prisma.student.create({ data: { name: studentName, group } });
+                    const uniqueEmail = `student_${Date.now()}_${Math.floor(Math.random()*1000)}@cnu.edu.ua`;
+                    student = await this.prisma.user.create({ data: { name: studentName, group, email: uniqueEmail, password: 'password123', role: 'STUDENT' } });
                 } else if (group && !student.group) {
-                    student = await this.prisma.student.update({
+                    student = await this.prisma.user.update({
                         where: { id: student.id },
                         data: { group },
                     });
                 }
 
                 // 2. Знайти або створити викладача
-                let teacher = await this.prisma.teacher.findFirst({ where: { name: teacherName } });
+                let teacher = await this.prisma.user.findFirst({ where: { name: teacherName, role: 'TEACHER' } });
                 if (!teacher) {
-                    teacher = await this.prisma.teacher.create({ data: { name: teacherName } });
+                    const uniqueEmail = `teacher_${Date.now()}_${Math.floor(Math.random()*1000)}@cnu.edu.ua`;
+                    teacher = await this.prisma.user.create({ data: { name: teacherName, email: uniqueEmail, password: 'password123', role: 'TEACHER' } });
                 }
 
                 // 3. Зберегти або оновити проєкт
@@ -82,13 +84,24 @@ export class UploadService {
                         data: { title, teacherId: teacher.id, semester: sheetName },
                     });
                 } else {
-                    await this.prisma.project.create({
+                    const newProj = await this.prisma.project.create({
                         data: {
                             title,
                             studentId: student.id,
                             teacherId: teacher.id,
                             semester: sheetName,
+                            status: 'APPROVED',
                         },
+                    });
+                    
+                    // Create chapters
+                    await this.prisma.chapter.createMany({
+                      data: [
+                        { title: 'Розділ 1', order: 1, projectId: newProj.id },
+                        { title: 'Розділ 2', order: 2, projectId: newProj.id },
+                        { title: 'Розділ 3', order: 3, projectId: newProj.id },
+                        { title: 'Розділ 4', order: 4, projectId: newProj.id },
+                      ],
                     });
                 }
 

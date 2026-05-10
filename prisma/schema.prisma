@@ -7,33 +7,55 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Student {
-  id      String   @id @default(uuid())
-  name    String   // ПІБ студента
-  group   String?  // Група (опціонально)
-  course  String?  // Курс студента
-  project Project?
-}
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  role     String  @default("STUDENT") // STUDENT, TEACHER, ADMIN
+  name     String
 
-model Teacher {
-  id       String    @id @default(uuid())
-  name     String    // ПІБ викладача/керівника
-  projects Project[] // Проєкти, якими керує
+  // Student specific
+  group    String?
+  course   String?
+  capacity Int @default(5) // Тільки для викладачів: скільки максимум студентів
+  studentProject Project? @relation("StudentProject")
+
+  // Teacher specific
+  teacherProjects Project[] @relation("TeacherProject")
 }
 
 model Project {
   id          String   @id @default(uuid())
   title       String   // Тема дипломного проєкту
   description String?  // Додаткова інформація
-  status      String   @default("В процесі") // Статус (напр. Захищено, В процесі)
-  semester    String?  // Семестр/дисципліна (назва аркуша Excel)
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  semester    String?  // Семестр/дисципліна
+  
+  proposedTitle String? // Нова тема (якщо студент подав запит на зміну)
   
   studentId   String   @unique
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student     User     @relation("StudentProject", fields: [studentId], references: [id], onDelete: Cascade)
   
   teacherId   String
-  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  teacher     User     @relation("TeacherProject", fields: [teacherId], references: [id], onDelete: Restrict)
+  
+  chapters    Chapter[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  title       String   // e.g. "Розділ 1", "Розділ 2", "Розділ 3", "Розділ 4"
+  order       Int      // 1, 2, 3, 4
+  status      String   @default("PENDING") // PENDING, SUBMITTED, APPROVED, REWORK
+  
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, order])
 }

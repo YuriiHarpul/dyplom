@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Loader2, BookOpen, GraduationCap, Clock, Filter } from "lucide-react";
+import { Search, Loader2, BookOpen, GraduationCap, Filter } from "lucide-react";
 
 type ProjectResult = {
   item: {
@@ -161,7 +161,7 @@ const HighlightText = ({ text, field: _field, query }: { text: string; matches?:
   highlightRanges.forEach(([start, end], i) => {
     if (start > lastIndex) result.push(text.slice(lastIndex, start));
     result.push(
-      <mark key={i} style={{ backgroundColor: "rgba(59, 130, 246, 0.45)", color: "inherit", borderRadius: "2px", padding: "0 2px" }}>
+      <mark key={i} style={{ backgroundColor: "rgba(46, 125, 50, 0.3)", color: "inherit", borderRadius: "2px", padding: "0 2px" }}>
         {text.slice(start, end + 1)}
       </mark>
     );
@@ -284,8 +284,8 @@ export default function Home() {
       <div className="glass-panel animate-fade-in" style={{ padding: "3rem", margin: "0 auto", maxWidth: "900px" }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }}>
-            <div style={{ background: "rgba(59, 130, 246, 0.2)", padding: "1rem", borderRadius: "50%" }}>
-              <GraduationCap size={48} color="#60a5fa" />
+            <div style={{ background: "rgba(46, 125, 50, 0.1)", padding: "1rem", borderRadius: "50%" }}>
+              <GraduationCap size={48} color="var(--primary-color)" />
             </div>
           </div>
           <h1>Моніторинг дипломних проєктів</h1>
@@ -335,7 +335,7 @@ export default function Home() {
           <div style={{
             display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
             gap: "1rem", marginBottom: "2rem", padding: "1.5rem",
-            backgroundColor: "rgba(15, 23, 42, 0.5)", borderRadius: "12px", border: "1px solid var(--border-color)"
+            backgroundColor: "var(--glass-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)"
           }}>
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>Семестр / Предмет</label>
@@ -389,19 +389,10 @@ export default function Home() {
                   <h4 style={{ fontSize: "1.2rem", color: "var(--text-primary)", maxWidth: "80%" }}>
                     <HighlightText text={project.item.title} matches={project.matches} field="title" query={debouncedQuery} />
                   </h4>
-                  <span style={{
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "999px",
-                    fontSize: "0.875rem",
-                    backgroundColor: project.item.status === "Захищено" ? "rgba(16, 185, 129, 0.2)" : "rgba(59, 130, 246, 0.2)",
-                    color: project.item.status === "Захищено" ? "var(--success-color)" : "var(--primary-color)",
-                    display: "flex", alignItems: "center", gap: "0.4rem"
-                  }}>
-                    <Clock size={14} /> {project.item.status}
-                  </span>
+
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", backgroundColor: "rgba(0,0,0,0.2)", padding: "1rem", borderRadius: "8px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", backgroundColor: "rgba(0,0,0,0.03)", padding: "1rem", borderRadius: "8px" }}>
                   <div>
                     <span style={{ color: "var(--text-secondary)", fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>Студент</span>
                     <strong style={{ color: "var(--text-primary)" }}>
