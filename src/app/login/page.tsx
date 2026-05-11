@@ -29,7 +29,7 @@ export default function LoginPage() {
       }
 
       const user = await res.json();
-      
+
       // Save to localStorage for demo purposes
       localStorage.setItem('user', JSON.stringify(user));
 
@@ -108,7 +108,7 @@ export default function LoginPage() {
 
         <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Ще не маєте акаунту? <Link href="/register" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: 500 }}>Зареєструватися</Link>
+            <Link href="/register" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: 500 }}>Реєстрація(тест)</Link>
           </p>
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Search, Loader2, BookOpen, GraduationCap, Filter } from "lucide-react";
+import { getHighlightParts } from "@/utils/search";
 
 type ProjectResult = {
   item: {
@@ -21,156 +22,23 @@ type Filters = {
   semesters: string[];
 };
 
-// Відстань Levenshtейна з раннім виходом для прискорення (оптимізовано)
-function levenshtein(a: string, b: string, maxErr?: number): number {
-  const dp = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+// Компонент для підсвічування тексту
+const HighlightText = ({ text, query }: { text: string; query: string }) => {
+  const parts = getHighlightParts(text, query);
+
+  return (
+    <>
+      {parts.map((part, i) => 
+        part.highlight ? (
+          <mark key={i} style={{ backgroundColor: "rgba(46, 125, 50, 0.3)", color: "inherit", borderRadius: "2px", padding: "0 2px" }}>
+            {part.text}
+          </mark>
+        ) : (
+          part.text
+        )
+      )}
+    </>
   );
-  for (let i = 1; i <= a.length; i++) {
-    let rowMin = Infinity;
-    for (let j = 1; j <= b.length; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      rowMin = Math.min(rowMin, dp[i][j]);
-    }
-    // Ранній вихід: якщо навіть мінімальне значення рядку > maxErr, подальші немає сенсу
-    if (maxErr !== undefined && rowMin > maxErr) return maxErr + 1;
-  }
-  return dp[a.length][b.length];
-}
-
-// Стоп-слова (те саме, що й на бекенді)
-const STOP_WORDS = new Set(["так", "і", "й", "для", "по", "в", "у", "на", "з", "із", "до", "від", "при", "або", "та", "це", "то", "що", "як", "але", "щоб", "коли", "між"]);
-
-// Парсить запит у значущі слова (без стоп-слів)
-function parseQueryWords(query: string): string[] {
-  return query.trim().split(/\s+/).filter(w => w.length >= 2 && !STOP_WORDS.has(w.toLowerCase()));
-}
-
-// Нормалізує рядок для порівняння: прибирає дефіси щоб "веб-додаток" = "вебдодаток"
-function normalizeForMatch(s: string): string {
-  return s.toLowerCase().replace(/-/g, '');
-}
-
-// Повертає кількість слів запиту, для яких знайдено збіг у тексті (Levenshtein)
-// Використовує нормалізований текст (без дефісів) для коректного порівняння
-function countMatchingWords(text: string, queryWords: string[]): number {
-  const textNorm = normalizeForMatch(text);
-  let count = 0;
-  for (const word of queryWords) {
-    const wNorm = normalizeForMatch(word);
-    const wLen = wNorm.length;
-    let found = false;
-    // Перевіряємо вікна -1/0/+1 відносно довжини слова:
-    // wLen-1 — якщо в запиті зайва літера ("інтигтрованою" → "інтегрованою")
-    // wLen   — для замін ("спльної" → "спільної" з однаковою довжиною)
-    // wLen+1 — якщо в запиті пропущена літера ("спльної" → "спільної")
-    for (const windowSize of [wLen - 2, wLen - 1, wLen, wLen + 1, wLen + 2].filter(s => s >= 2)) {
-      const maxErr = Math.max(1, Math.floor(windowSize * 0.2));
-      for (let i = 0; i <= textNorm.length - windowSize; i++) {
-        if (levenshtein(wNorm, textNorm.slice(i, i + windowSize), maxErr) <= maxErr) {
-          found = true;
-          break;
-        }
-      }
-      if (found) break;
-    }
-    if (found) count++;
-  }
-  return count;
-}
-
-// Компонент для підсвічування тексту зі стемм-пошуком (корінь слова).
-// Виділяє всі слова тексту, що мають спільний корінь з кожним словом запиту.
-// Наприклад: "мобільний" → виділяє "мобільного", "мобільних", "мобільному" тощо.
-const HighlightText = ({ text, field: _field, query }: { text: string; matches?: any[]; field: string; query: string }) => {
-  if (!text || !query.trim()) return <>{text}</>;
-
-  const queryWords = parseQueryWords(query);
-  if (queryWords.length === 0) return <>{text}</>;
-
-  const textLower = text.toLowerCase();
-
-  // Знаходимо всі "слова" в тексті (їхні позиції)
-  const wordTokens: { start: number; end: number; lower: string }[] = [];
-  const wordRegex = /[а-яіїєґa-z'ʼ]+/gi;
-  let match: RegExpExecArray | null;
-  while ((match = wordRegex.exec(textLower)) !== null) {
-    wordTokens.push({ start: match.index, end: match.index + match[0].length - 1, lower: match[0] });
-  }
-
-  // Додаємо злиті токени для дефісних слів (веб-додаток → "вебдодаток")
-  // Це вирішує проблему коли юзер пише "вебдодаток" а в назві є "веб-додаток"
-  const allTokens = [...wordTokens];
-  for (let i = 0; i < wordTokens.length - 1; i++) {
-    const curr = wordTokens[i];
-    const next = wordTokens[i + 1];
-    // Якщо між токенами є дефіс — створюємо злитий токен
-    if (textLower.slice(curr.end + 1, curr.end + 2) === '-' && next.start === curr.end + 2) {
-      allTokens.push({
-        start: curr.start,
-        end: next.end,
-        lower: curr.lower + next.lower // "веб" + "додаток" = "вебдодаток"
-      });
-    }
-  }
-
-  // Для кожного слова запиту знаходимо слова тексту зі спільним коренем
-  const highlightRanges: [number, number][] = [];
-
-  for (const qWord of queryWords) {
-    const qLower = qWord.toLowerCase();
-    // Мінімальна довжина спільного префікса (кореня): ~70% від коротшого слова
-    const stemLen = Math.max(3, Math.floor(qLower.length * 0.7));
-    const qStem = qLower.slice(0, stemLen);
-
-    let bestToken: { start: number; end: number; lower: string } | null = null;
-
-    for (const token of allTokens) {
-      // Перевірка 1: спільний корінь (однакові перші stemLen символів — простий стемм)
-      const hasCommonStem = token.lower.startsWith(qStem) || qLower.startsWith(token.lower.slice(0, stemLen));
-
-      // Перевірка 2: нечіткий збіг (Levenshtein) для слів з помилками
-      const maxErr = Math.floor(Math.min(qLower.length, token.lower.length) * 0.35);
-      const minLen = Math.min(qLower.length, token.lower.length);
-      const maxLen = Math.max(qLower.length, token.lower.length);
-      const hasFuzzyMatch = maxLen <= minLen + 3 &&
-        levenshtein(qLower, token.lower, maxErr) <= maxErr;
-
-      if (hasCommonStem || hasFuzzyMatch) {
-        // Вибираємо НАЙДОВШИЙ збіг (щоб "вебдодатку" переміг над "веб")
-        if (!bestToken || (token.end - token.start) > (bestToken.end - bestToken.start)) {
-          bestToken = token;
-        }
-      }
-    }
-
-    if (bestToken) {
-      highlightRanges.push([bestToken.start, bestToken.end]);
-    }
-  }
-
-  if (highlightRanges.length === 0) return <>{text}</>;
-
-  highlightRanges.sort((a, b) => a[0] - b[0]);
-
-  const result: (string | React.ReactNode)[] = [];
-  let lastIndex = 0;
-
-  highlightRanges.forEach(([start, end], i) => {
-    if (start > lastIndex) result.push(text.slice(lastIndex, start));
-    result.push(
-      <mark key={i} style={{ backgroundColor: "rgba(46, 125, 50, 0.3)", color: "inherit", borderRadius: "2px", padding: "0 2px" }}>
-        {text.slice(start, end + 1)}
-      </mark>
-    );
-    lastIndex = end + 1;
-  });
-
-  if (lastIndex < text.length) result.push(text.slice(lastIndex));
-
-  return <>{result}</>;
 };
 
 export default function Home() {
@@ -269,15 +137,8 @@ export default function Home() {
   // useMemo: фільтруємо результати через Levenshtein тільки при зміні results або debouncedQuery
   // НЕ перераховується при кожному рендері — вирішує проблему лагів
   const visibleResults = useMemo(() => {
-    const queryWords = parseQueryWords(debouncedQuery);
-    if (queryWords.length === 0) return results;
-    const minMatches = Math.max(1, Math.round(queryWords.length * 0.8));
-    return results.filter(p => {
-      // Перевіряємо title та ім'я студента — щоб прізвища студентів не відфільтровувались
-      const searchText = `${p.item.title} ${p.item.student?.name ?? ''}`;
-      return countMatchingWords(searchText, queryWords) >= minMatches;
-    });
-  }, [results, debouncedQuery]);
+    return results;
+  }, [results]);
 
   return (
     <main className="container" style={{ paddingTop: "7vh", paddingBottom: "5vh" }}>
@@ -387,7 +248,7 @@ export default function Home() {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                   <h4 style={{ fontSize: "1.2rem", color: "var(--text-primary)", maxWidth: "80%" }}>
-                    <HighlightText text={project.item.title} matches={project.matches} field="title" query={debouncedQuery} />
+                    <HighlightText text={project.item.title} query={debouncedQuery} />
                   </h4>
 
                 </div>
@@ -396,7 +257,7 @@ export default function Home() {
                   <div>
                     <span style={{ color: "var(--text-secondary)", fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>Студент</span>
                     <strong style={{ color: "var(--text-primary)" }}>
-                      <HighlightText text={project.item.student.name} matches={project.matches} field="student.name" query={debouncedQuery} />
+                      <HighlightText text={project.item.student.name} query={debouncedQuery} />
                       {project.item.student.group ? <span style={{ color: "var(--primary-color)", marginLeft: "4px" }}>({project.item.student.group})</span> : ''}
                     </strong>
                   </div>

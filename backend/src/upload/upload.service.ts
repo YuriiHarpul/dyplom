@@ -74,8 +74,8 @@ export class UploadService {
                 }
 
                 // 3. Зберегти або оновити проєкт
-                const existingProject = await this.prisma.project.findUnique({
-                    where: { studentId: student.id },
+                const existingProject = await this.prisma.project.findFirst({
+                    where: { studentId: student.id, title },
                 });
 
                 if (existingProject) {

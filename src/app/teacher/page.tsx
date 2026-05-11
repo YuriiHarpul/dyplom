@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, X, RefreshCw, FileText, CheckCircle, AlertCircle, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { calculateSearchScore } from '@/utils/search';
 
 export default function TeacherDashboard() {
   const router = useRouter();
@@ -10,6 +11,7 @@ export default function TeacherDashboard() {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,7 +74,23 @@ export default function TeacherDashboard() {
   const pendingProjects = projects.filter(p => p.status === 'PENDING');
   const activeProjects = projects.filter(p => p.status === 'APPROVED');
   
-  const filteredActive = activeProjects.filter(p => p.student.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.student.group?.toLowerCase().includes(searchQuery.toLowerCase()));
+  const getFilteredActive = () => {
+    let list = activeProjects.filter(p => {
+      const matchesGroup = !groupFilter || (p.student.group && p.student.group.toLowerCase().includes(groupFilter.toLowerCase()));
+      return matchesGroup;
+    });
+
+    if (searchQuery) {
+      list = list
+        .map(p => ({ p, score: calculateSearchScore(`${p.student.name} ${p.title}`, searchQuery) }))
+        .filter(res => res.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(res => res.p);
+    }
+    return list;
+  };
+
+  const filteredActive = getFilteredActive();
 
   return (
     <div className="container" style={{ paddingTop: '5vh', paddingBottom: '5vh' }}>
@@ -92,6 +110,7 @@ export default function TeacherDashboard() {
               {pendingProjects.map(p => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                   <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>{p.pool?.name}</div>
                     <h4 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>{p.title}</h4>
                     <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Студент: {p.student.name} {p.student.group ? `(${p.student.group})` : ''}</p>
                   </div>
@@ -109,16 +128,27 @@ export default function TeacherDashboard() {
         <div className="glass-panel" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h3 style={{ margin: 0 }}>Роботи в процесі ({activeProjects.length})</h3>
-            <div style={{ position: 'relative', width: '300px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-              <input 
-                type="text" 
-                className="input-control" 
-                style={{ paddingLeft: '2.5rem', paddingRight: '1rem', paddingBottom: '0.5rem', paddingTop: '0.5rem' }} 
-                placeholder="Пошук студента..." 
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', width: '250px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                <input 
+                  type="text" 
+                  className="input-control" 
+                  style={{ paddingLeft: '2.5rem' }} 
+                  placeholder="Пошук студента/теми..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div style={{ width: '200px' }}>
+                <input 
+                  type="text" 
+                  className="input-control" 
+                  placeholder="Фільтр груп (напр. ІПЗ)..." 
+                  value={groupFilter}
+                  onChange={e => setGroupFilter(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           
@@ -133,6 +163,7 @@ export default function TeacherDashboard() {
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', cursor: 'pointer', transition: 'background 0.2s', background: expandedProjectId === p.id ? 'rgba(0,0,0,0.02)' : 'transparent' }}
                   >
                     <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>{p.pool?.name}</div>
                       <h4 style={{ fontSize: '1.1rem', color: 'var(--primary-color)', marginBottom: '0.2rem' }}>{p.student.name} {p.student.group ? `(${p.student.group})` : ''}</h4>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{p.title}</p>
                     </div>

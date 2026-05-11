@@ -1,25 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-// CommonJS-compatible Fuse.js import (ts-node compiles to CJS)
-import * as FuseLib from 'fuse.js';
-const Fuse = (FuseLib as any).default ?? FuseLib;
+import { getSearchTokens, stemUkrainian, STOP_WORDS } from './stemmer';
 
-const STOP_WORDS = new Set([
-    'так', 'і', 'й', 'для', 'по', 'в', 'у', 'на', 'з', 'із',
-    'до', 'від', 'при', 'або', 'та', 'це', 'то',
-    'що', 'як', 'але', 'щоб', 'коли', 'між', '',
-]);
-
-const fuseOptions = {
-    includeScore: true,
-    includeMatches: true,
-    useExtendedSearch: true,
-    findAllMatches: true,
-    ignoreLocation: true,
-    threshold: 0.4,
-    minMatchCharLength: 2,
-    keys: ['title', 'student.name'],
-};
+function levenshtein(a: string, b: string): number {
+    const dp = Array.from({ length: a.length + 1 }, (_, i) =>
+        Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+    );
+    for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return dp[a.length][b.length];
+}
 
 @Injectable()
 export class SearchService {
@@ -30,6 +25,7 @@ export class SearchService {
         if (teacher) whereClause.teacher = { name: teacher };
         if (semester) whereClause.semester = semester;
 
+        // If no filters and no query, return empty
         if (!query && !teacher && !semester) {
             return { results: [] };
         }
@@ -39,69 +35,82 @@ export class SearchService {
             include: { student: true, teacher: true },
         });
 
-        let finalResults: { item: any; matches: any }[] = allProjects.map((p: any) => ({
-            item: p,
-            matches: [],
-        }));
-
-        if (query && query.trim() !== '') {
-            const fuse = new Fuse(allProjects, fuseOptions);
-            const queryWords = query
-                .trim()
-                .split(/\s+/)
-                .filter((w) => w.length >= 2 && !STOP_WORDS.has(w.toLowerCase()));
-
-            if (queryWords.length === 0) {
-                const searchResults = fuse.search(query);
-                finalResults = searchResults.map((r) => ({ item: r.item, matches: r.matches }));
-            } else {
-                const matchCount = new Map<string, number>();
-                const matchScore = new Map<string, number>();
-                const itemsById = new Map<string, any>();
-
-                for (const word of queryWords) {
-                    const wordResults = fuse.search(word);
-                    for (const r of wordResults) {
-                        itemsById.set(r.item.id, r.item);
-                        matchCount.set(r.item.id, (matchCount.get(r.item.id) ?? 0) + 1);
-                        matchScore.set(r.item.id, (matchScore.get(r.item.id) ?? 0) + (r.score ?? 1));
-                    }
-                }
-
-                const phraseQuery = query.trim().toLowerCase();
-                const hasExactPhrase = (id: string) => {
-                    const title = itemsById.get(id)?.title?.toLowerCase() ?? '';
-                    return title.includes(phraseQuery);
-                };
-
-                const threshold = Math.max(1, Math.round(queryWords.length * 0.8));
-
-                const sortByRelevance = (
-                    [idA, countA]: [string, number],
-                    [idB, countB]: [string, number],
-                ) => {
-                    const exactA = hasExactPhrase(idA) ? 1 : 0;
-                    const exactB = hasExactPhrase(idB) ? 1 : 0;
-                    if (exactB !== exactA) return exactB - exactA;
-                    if (countB !== countA) return countB - countA;
-                    return (matchScore.get(idA) ?? 1) - (matchScore.get(idB) ?? 1);
-                };
-
-                finalResults = [...matchCount.entries()]
-                    .filter(([, count]) => count >= threshold)
-                    .sort(sortByRelevance)
-                    .map(([id]) => ({ item: itemsById.get(id)!, matches: [] }));
-
-                if (finalResults.length === 0) {
-                    const fallbackThreshold = Math.max(1, Math.round(queryWords.length * 0.67));
-                    finalResults = [...matchCount.entries()]
-                        .filter(([, count]) => count >= fallbackThreshold)
-                        .sort(sortByRelevance)
-                        .map(([id]) => ({ item: itemsById.get(id)!, matches: [] }));
-                }
-            }
+        // If no query, but filters are present - just return filtered list
+        if (!query || query.trim() === '') {
+            return { 
+                results: allProjects.slice(0, 100).map(p => ({ item: p, score: 1 })) 
+            };
         }
 
-        return { results: finalResults.slice(0, 100) };
+        const queryNorm = query.toLowerCase().trim();
+        const queryWords = queryNorm.split(/\s+/).filter(w => w.length >= 2 && !STOP_WORDS.has(w));
+        const queryStems = queryWords.map(w => stemUkrainian(w));
+
+        if (queryStems.length === 0) {
+            // If query consists only of stop words or is empty, but filters are present
+            return { results: allProjects.slice(0, 100).map(p => ({ item: p, score: 1 })) };
+        }
+
+        const scoredResults = allProjects.map(project => {
+            const titleNorm = project.title.toLowerCase();
+            const titleTokens = getSearchTokens(project.title);
+            
+            let score = 0;
+            let matchedWordsCount = 0;
+
+            // 1. Пряме входження цілої фрази (Найвищий пріоритет)
+            if (titleNorm.includes(queryNorm)) {
+                score += 100;
+            }
+
+            // 2. Перевірка збігу стемів
+            for (const qStem of queryStems) {
+                const hasMatch = titleTokens.some(tToken => {
+                    if (tToken === qStem) return true;
+                    if (tToken.length > 4 && qStem.length > 4) {
+                        if (tToken.startsWith(qStem) || qStem.startsWith(tToken)) return true;
+                    }
+                    return false;
+                });
+                if (hasMatch) {
+                    matchedWordsCount++;
+                    score += 10;
+                }
+            }
+
+            // 3. Бонус за точний збіг цілих слів (не стемів)
+            for (const qWord of queryWords) {
+                if (titleNorm.includes(qWord)) {
+                    score += 5;
+                }
+            }
+
+            // 4. Штраф за різницю в довжині (щоб коротші точні збіги були вище)
+            const lengthDiff = Math.abs(titleNorm.length - queryNorm.length);
+            score -= (lengthDiff * 0.1);
+
+            return {
+                item: project,
+                score,
+                matchedWordsCount
+            };
+        });
+
+        // Require ALL words to match for queries up to 3 words.
+        // For longer queries, require at least 70% match.
+        const threshold = queryStems.length <= 3 ? queryStems.length : Math.ceil(queryStems.length * 0.7);
+        
+        const filtered = scoredResults
+            .filter(r => r.matchedWordsCount >= threshold)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 100);
+
+        return {
+            results: filtered.map(r => ({
+                item: r.item,
+                score: r.score,
+                matches: [] // Для зворотної сумісності
+            }))
+        };
     }
 }

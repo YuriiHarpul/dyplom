@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiService } from './api.service';
 
 @Controller('api')
@@ -21,8 +21,8 @@ export class ApiController {
   }
 
   @Post('admin/assign-teacher')
-  assignTeacher(@Body() body: { studentId: string; teacherId: string }) {
-    return this.apiService.assignTeacher(body.studentId, body.teacherId);
+  assignTeacher(@Body() body: { studentId: string; teacherId: string; poolId: string }) {
+    return this.apiService.assignTeacher(body.studentId, body.teacherId, body.poolId);
   }
 
   @Post('admin/change-role')
@@ -36,8 +36,8 @@ export class ApiController {
   }
 
   @Post('projects')
-  createProjectRequest(@Body() body: { studentId: string; title: string; teacherId: string }) {
-    return this.apiService.createProjectRequest(body.studentId, body.title, body.teacherId);
+  createProjectRequest(@Body() body: { studentId: string; title: string; teacherId: string; poolId: string }) {
+    return this.apiService.createProjectRequest(body.studentId, body.title, body.teacherId, body.poolId);
   }
 
   @Post('projects/:id/approve')
@@ -73,5 +73,57 @@ export class ApiController {
   @Post('chapters/:id/rework')
   reworkChapter(@Param('id') id: string) {
     return this.apiService.reworkChapter(id);
+  }
+
+  // --- Pools ---
+  @Get('admin/pools')
+  getPools() {
+    return this.apiService.getPools();
+  }
+
+  @Post('admin/pools')
+  createPool(@Body() body: { name: string; year: number; semester: string; workType: string; groupPatterns: string }) {
+    return this.apiService.createPool(body.name, body.year, body.semester, body.workType, body.groupPatterns);
+  }
+
+  @Post('admin/pools/:id/teachers')
+  addTeacherToPool(
+    @Param('id') poolId: string,
+    @Body() body: { teacherId: string; capacity: number }
+  ) {
+    return this.apiService.addTeacherToPool(poolId, body.teacherId, body.capacity);
+  }
+
+  @Delete('admin/pools/:id/teachers/:teacherId')
+  removeTeacherFromPool(
+    @Param('id') poolId: string,
+    @Param('teacherId') teacherId: string
+  ) {
+    return this.apiService.removeTeacherFromPool(poolId, teacherId);
+  }
+
+  @Patch('admin/pools/:id/teachers/:teacherId')
+  updateTeacherCapacity(
+    @Param('id') poolId: string,
+    @Param('teacherId') teacherId: string,
+    @Body('capacity') capacity: any
+  ) {
+    return this.apiService.addTeacherToPool(poolId, teacherId, Number(capacity));
+  }
+
+  @Delete('admin/pools/:id')
+  deletePool(@Param('id') poolId: string) {
+    return this.apiService.deletePool(poolId);
+  }
+
+  // --- Student Pool Endpoints ---
+  @Get('student/pools')
+  getAvailablePoolsForStudent(@Query('studentId') studentId: string) {
+    return this.apiService.getAvailablePoolsForStudent(studentId);
+  }
+
+  @Get('student/pools/:id/teachers')
+  getTeachersInPool(@Param('id') poolId: string) {
+    return this.apiService.getTeachersInPool(poolId);
   }
 }

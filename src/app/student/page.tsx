@@ -7,13 +7,15 @@ import { BookOpen, CheckCircle, Clock, AlertCircle, Edit3, Send } from 'lucide-r
 export default function StudentDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [project, setProject] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]); // plural
   const [teachers, setTeachers] = useState<any[]>([]);
   
   // Form states
   const [title, setTitle] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
   const [proposedTitle, setProposedTitle] = useState('');
+  const [availablePools, setAvailablePools] = useState<any[]>([]);
+  const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,18 +37,12 @@ export default function StudentDashboard() {
     setLoading(true);
     try {
       const projRes = await fetch(`http://localhost:3001/api/projects?userId=${userId}&role=STUDENT`);
-      const projText = await projRes.text();
-      const projData = projText ? JSON.parse(projText) : null;
-      setProject(projData);
+      const projData = await projRes.json();
+      setProjects(projData);
 
-      if (!projData) {
-        const teachRes = await fetch('http://localhost:3001/api/users?role=TEACHER');
-        const teachData = await teachRes.json();
-        setTeachers(teachData);
-        if (teachData.length > 0) {
-          // No auto-selection, user will choose manually from the list
-        }
-      }
+      const poolsRes = await fetch(`http://localhost:3001/api/student/pools?studentId=${userId}`);
+      const poolsData = await poolsRes.json();
+      setAvailablePools(poolsData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -54,20 +50,40 @@ export default function StudentDashboard() {
     }
   };
 
+  const fetchTeachersInPool = async (poolId: string) => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/student/pools/${poolId}/teachers`);
+      const data = await res.json();
+      setTeachers(data);
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (selectedPoolId && !projects.find(p => p.poolId === selectedPoolId)) {
+      fetchTeachersInPool(selectedPoolId);
+    }
+  }, [selectedPoolId, projects]);
+
   const createRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     await fetch('http://localhost:3001/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentId: user.id, title, teacherId: selectedTeacher.id }),
+      body: JSON.stringify({ 
+        studentId: user.id, 
+        title, 
+        teacherId: selectedTeacher.id,
+        poolId: selectedPoolId
+      }),
     });
+    setSelectedTeacher(null);
+    setTitle('');
     fetchData(user.id);
   };
 
-  const requestTitleChange = async (e: React.FormEvent) => {
+  const requestTitleChange = async (e: React.FormEvent, projectId: string) => {
     e.preventDefault();
-    if (!project) return;
-    await fetch(`http://localhost:3001/api/projects/${project.id}/change-title`, {
+    await fetch(`http://localhost:3001/api/projects/${projectId}/change-title`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ proposedTitle }),
@@ -94,120 +110,193 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {!project ? (
-        !selectedTeacher ? (
-          <div className="glass-panel" style={{ padding: '2rem', margin: '0 auto' }}>
-            <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Оберіть керівника дипломної роботи</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-              {teachers.map(t => {
-                const used = t._count?.teacherProjects || 0;
-                const max = t.capacity || 5;
-                const available = Math.max(0, max - used);
-                const isFull = available <= 0;
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        
+        {/* Плитки завдань (Пулів) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+          {availablePools.map(pool => {
+            const project = projects.find(p => p.poolId === pool.id);
+            const isSelected = selectedPoolId === pool.id;
+            
+            return (
+              <div 
+                key={pool.id} 
+                onClick={() => setSelectedPoolId(pool.id)}
+                style={{ 
+                  padding: '1.5rem', 
+                  borderRadius: '16px', 
+                  border: isSelected ? '2px solid var(--primary-color)' : '1px solid var(--border-color)', 
+                  background: isSelected ? 'rgba(46, 125, 50, 0.05)' : 'var(--bg-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                  boxShadow: isSelected ? '0 8px 24px rgba(46, 125, 50, 0.1)' : 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{pool.workType}</span>
+                  {project && (
+                    <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'var(--success-color)', color: 'white', fontWeight: 600 }}>АКТИВНО</span>
+                  )}
+                </div>
+                <h4 style={{ fontSize: '1.1rem', margin: 0 }}>{pool.name}</h4>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{pool.year} • {pool.semester}</div>
+              </div>
+            );
+          })}
+        </div>
 
-                return (
-                  <div key={t.id} style={{
-                    padding: '1.5rem',
-                    borderRadius: '8px',
-                    border: `1px solid ${isFull ? 'var(--border-color)' : 'var(--primary-color)'}`,
-                    background: isFull ? 'rgba(0,0,0,0.02)' : 'var(--bg-secondary)',
-                    opacity: isFull ? 0.6 : 1,
-                    cursor: isFull ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                  }} onClick={() => !isFull && setSelectedTeacher(t)}>
-                    <h4 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>{t.name}</h4>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: isFull ? 'var(--danger-color)' : 'var(--success-color)', fontSize: '0.9rem', fontWeight: 500 }}>
-                      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: isFull ? 'var(--danger-color)' : 'var(--success-color)' }}></span>
-                      Вільних місць: {available} / {max}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Деталі обраного завдання */}
+        {!selectedPoolId ? (
+          <div className="glass-panel" style={{ padding: '4rem 2rem', textAlign: 'center', border: '2px dashed var(--border-color)', background: 'transparent' }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Оберіть завдання зі списку вище, щоб переглянути деталі або статус</div>
           </div>
         ) : (
-          <div className="glass-panel animate-fade-in" style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-            <button type="button" onClick={() => setSelectedTeacher(null)} className="btn" style={{ background: 'transparent', padding: '0', color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              ← Змінити керівника
-            </button>
-            <h3 style={{ marginBottom: '1.5rem' }}>Подати запит на тему дипломної</h3>
-            
-            <div style={{ background: 'rgba(46, 125, 50, 0.05)', padding: '1.25rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid rgba(46, 125, 50, 0.1)' }}>
-              <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Обраний керівник:</span>
-              <strong style={{ fontSize: '1.1rem', color: 'var(--primary-color)' }}>{selectedTeacher.name}</strong>
-            </div>
-
-            <form onSubmit={createRequest} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Тема роботи</label>
-                <input required type="text" className="input-control" value={title} onChange={e => setTitle(e.target.value)} placeholder="Введіть тему..." />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }}>Відправити запит</button>
-            </form>
-          </div>
-        )
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {/* Інформація про проєкт */}
-          <div className="glass-panel" style={{ padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h3 style={{ fontSize: '1.5rem', color: 'var(--primary-color)', marginBottom: '0.5rem' }}>{project.title}</h3>
-                <p style={{ color: 'var(--text-secondary)' }}>Керівник: {project.teacher.name}</p>
-              </div>
-              <div style={{ padding: '0.5rem 1rem', borderRadius: '999px', background: project.status === 'APPROVED' ? 'rgba(46,125,50,0.1)' : 'rgba(239,68,68,0.1)', color: project.status === 'APPROVED' ? 'var(--success-color)' : 'var(--danger-color)' }}>
-                {project.status === 'PENDING' ? 'Очікує затвердження керівником' : project.status === 'REJECTED' ? 'Відхилено' : 'Затверджено'}
-              </div>
-            </div>
-
-            {project.status === 'APPROVED' && (
-              <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-                <h4>Запит на зміну теми</h4>
-                {project.proposedTitle ? (
-                  <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}><Clock size={16} style={{ display: 'inline', marginRight: '4px' }}/> Ви подали запит на зміну теми на: <strong>{project.proposedTitle}</strong>. Очікуйте підтвердження.</p>
-                ) : (
-                  <form onSubmit={requestTitleChange} style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                    <input required type="text" className="input-control" value={proposedTitle} onChange={e => setProposedTitle(e.target.value)} placeholder="Введіть нову тему..." />
-                    <button type="submit" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>Надіслати запит</button>
-                  </form>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Розділи */}
-          {project.status === 'APPROVED' && project.chapters && (
-            <div className="glass-panel" style={{ padding: '2rem' }}>
-              <h3 style={{ marginBottom: '1.5rem' }}>Прогрес виконання (Розділи)</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {project.chapters.sort((a: any, b: any) => a.order - b.order).map((chapter: any) => (
-                  <div key={chapter.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'var(--bg-secondary)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                        {chapter.order}
-                      </div>
-                      <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>{chapter.title}</span>
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {(() => {
+              const project = projects.find(p => p.poolId === selectedPoolId);
+              const pool = availablePools.find(p => p.id === selectedPoolId);
+              
+              if (!project) {
+                // Форма вибору керівника
+                return (
+                  <div className="glass-panel" style={{ padding: '2.5rem' }}>
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h3 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Вибір керівника</h3>
+                      <p style={{ color: 'var(--text-secondary)' }}>Для початку роботи над "{pool?.name}" необхідно обрати керівника та запропонувати тему.</p>
                     </div>
-                    
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                      {chapter.status === 'PENDING' && <span style={{ color: 'var(--text-secondary)' }}>Не розпочато</span>}
-                      {chapter.status === 'SUBMITTED' && <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={16}/> На перевірці</span>}
-                      {chapter.status === 'REWORK' && <span style={{ color: 'var(--danger-color)', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={16}/> Доопрацювання</span>}
-                      {chapter.status === 'APPROVED' && <span style={{ color: 'var(--success-color)', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={16}/> Затверджено</span>}
 
-                      {(chapter.status === 'PENDING' || chapter.status === 'REWORK') && (
-                        <button onClick={() => submitChapter(chapter.id)} className="btn btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.9rem' }}>
-                          <Send size={16} style={{ marginRight: '6px' }}/> Відправити на перевірку
-                        </button>
+                    {!selectedTeacher ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                        {teachers.map(t => {
+                          const isFull = t.used >= t.capacity;
+                          return (
+                            <div key={t.id} style={{
+                              padding: '1.5rem',
+                              borderRadius: '12px',
+                              border: `1px solid ${isFull ? 'var(--border-color)' : 'var(--primary-color)'}`,
+                              background: isFull ? 'rgba(0,0,0,0.02)' : 'var(--bg-secondary)',
+                              opacity: isFull ? 0.6 : 1,
+                              cursor: isFull ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s'
+                            }} onClick={() => !isFull && setSelectedTeacher(t)}>
+                              <h4 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>{t.name}</h4>
+                              <div style={{ color: isFull ? 'var(--danger-color)' : 'var(--success-color)', fontSize: '0.85rem', fontWeight: 600 }}>
+                                Вільних місць: {t.capacity - t.used} / {t.capacity}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+                        <button onClick={() => setSelectedTeacher(null)} className="btn" style={{ background: 'transparent', marginBottom: '1.5rem', padding: 0, color: 'var(--text-secondary)' }}>← Назад до списку викладачів</button>
+                        <form onSubmit={createRequest} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                          <div style={{ background: 'rgba(46, 125, 50, 0.05)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(46, 125, 50, 0.1)' }}>
+                            Обраний керівник: <strong style={{ color: 'var(--primary-color)' }}>{selectedTeacher.name}</strong>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Тема вашої роботи</label>
+                            <input required type="text" className="input-control" value={title} onChange={e => setTitle(e.target.value)} placeholder="Введіть повну назву теми..." style={{ padding: '0.8rem 1rem' }} />
+                          </div>
+                          <button type="submit" className="btn btn-primary" style={{ padding: '0.8rem' }}>Відправити запит керівнику</button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                );
+              } else {
+                // Статус активного проєкту
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                    <div className="glass-panel" style={{ padding: '2.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                            <Clock size={16} /> 
+                            <span>Статус проєкту: <strong>{project.status === 'PENDING' ? 'Очікує підтвердження' : project.status === 'REJECTED' ? 'Відхилено' : 'Затверджено'}</strong></span>
+                          </div>
+                          <h3 style={{ fontSize: '1.8rem', color: 'var(--primary-color)', margin: '0.5rem 0' }}>{project.title}</h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Керівник: <strong>{project.teacher.name}</strong></p>
+                        </div>
+                        <div style={{ padding: '0.6rem 1.2rem', borderRadius: '999px', background: project.status === 'APPROVED' ? 'rgba(46,125,50,0.1)' : 'rgba(245,158,11,0.1)', color: project.status === 'APPROVED' ? 'var(--success-color)' : '#b45309', fontWeight: 700, fontSize: '0.9rem' }}>
+                          {project.status === 'PENDING' ? 'В ОБРОБЦІ' : project.status === 'REJECTED' ? 'ВІДХИЛЕНО' : 'ЗАТВЕРДЖЕНО'}
+                        </div>
+                      </div>
+
+                      {project.status === 'APPROVED' && (
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                          <h4 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Зміна теми</h4>
+                          {project.proposedTitle ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(245,158,11,0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(245,158,11,0.2)' }}>
+                              <Clock size={18} color="#b45309" />
+                              <span style={{ fontSize: '0.95rem' }}>Ви запропонували нову тему: <strong>{project.proposedTitle}</strong>. Очікуйте на рішення керівника.</span>
+                            </div>
+                          ) : (
+                            <form onSubmit={(e) => requestTitleChange(e, project.id)} style={{ display: 'flex', gap: '1rem' }}>
+                              <input required type="text" className="input-control" value={proposedTitle} onChange={e => setProposedTitle(e.target.value)} placeholder="Введіть нову назву теми..." />
+                              <button type="submit" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>Подати запит</button>
+                            </form>
+                          )}
+                        </div>
                       )}
                     </div>
+
+                    {/* Прогрес по розділах */}
+                    {project.status === 'APPROVED' && project.chapters && (
+                      <div className="glass-panel" style={{ padding: '2.5rem' }}>
+                        <h3 style={{ marginBottom: '1.5rem' }}>Етапи виконання</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                          {project.chapters.sort((a: any, b: any) => a.order - b.order).map((chapter: any) => (
+                            <div key={chapter.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'var(--bg-secondary)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                                <div style={{ 
+                                  width: '36px', 
+                                  height: '36px', 
+                                  borderRadius: '50%', 
+                                  background: chapter.status === 'APPROVED' ? 'var(--success-color)' : 'rgba(0,0,0,0.05)', 
+                                  color: chapter.status === 'APPROVED' ? 'white' : 'inherit',
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center', 
+                                  fontWeight: 700 
+                                }}>
+                                  {chapter.status === 'APPROVED' ? <CheckCircle size={20} /> : chapter.order}
+                                </div>
+                                <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>{chapter.title}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                <span style={{ 
+                                  fontSize: '0.9rem', 
+                                  fontWeight: 600,
+                                  color: chapter.status === 'SUBMITTED' ? '#f59e0b' : chapter.status === 'REWORK' ? 'var(--danger-color)' : 'var(--text-secondary)'
+                                }}>
+                                  {chapter.status === 'PENDING' && 'НЕ РОЗПОЧАТО'}
+                                  {chapter.status === 'SUBMITTED' && 'НА ПЕРЕВІРЦІ'}
+                                  {chapter.status === 'REWORK' && 'ПОТРЕБУЄ ДООПРАЦЮВАННЯ'}
+                                  {chapter.status === 'APPROVED' && 'ЗАТВЕРДЖЕНО'}
+                                </span>
+                                {(chapter.status === 'PENDING' || chapter.status === 'REWORK') && (
+                                  <button onClick={() => submitChapter(chapter.id)} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                                    <Send size={16} style={{ marginRight: '6px' }} /> Надіслати
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+                );
+              }
+            })()}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

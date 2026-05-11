@@ -3,6 +3,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.chapter.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.poolTeacher.deleteMany();
+  await prisma.pool.deleteMany();
   await prisma.user.deleteMany(); // Clear existing
 
   const admin = await prisma.user.create({
@@ -18,7 +22,7 @@ async function main() {
     data: {
       email: 'teacher@cnu.edu.ua',
       password: 'password123',
-      name: 'Іван Петренко (Викладач)',
+      name: 'Микола Кузь(Викладач)',
       role: 'TEACHER',
     },
   });
@@ -27,14 +31,32 @@ async function main() {
     data: {
       email: 'student@cnu.edu.ua',
       password: 'password123',
-      name: 'Олена Коваленко (Студент)',
+      name: 'Юрій Гарпуль (Студент)',
       role: 'STUDENT',
-      group: 'КН-41',
+      group: 'ІПЗ-41',
       course: '4',
     },
   });
 
-  console.log('Database seeded with:', { admin, teacher, student });
+  const pool = await prisma.pool.create({
+    data: {
+      name: 'Курсова робота 2026',
+      year: 2026,
+      semester: '1 півріччя',
+      workType: 'Курсова робота',
+      groupPatterns: 'ІПЗ-4*',
+    },
+  });
+
+  await prisma.poolTeacher.create({
+    data: {
+      poolId: pool.id,
+      teacherId: teacher.id,
+      capacity: 10,
+    },
+  });
+
+  console.log('Database seeded with:', { admin, teacher, student, pool });
 }
 
 main()

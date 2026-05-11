@@ -18,10 +18,11 @@ model User {
   group    String?
   course   String?
   capacity Int @default(5) // Тільки для викладачів: скільки максимум студентів
-  studentProject Project? @relation("StudentProject")
+  studentProjects Project[] @relation("StudentProject")
 
   // Teacher specific
   teacherProjects Project[] @relation("TeacherProject")
+  poolTeachers    PoolTeacher[]
 }
 
 model Project {
@@ -33,16 +34,21 @@ model Project {
   
   proposedTitle String? // Нова тема (якщо студент подав запит на зміну)
   
-  studentId   String   @unique
+  studentId   String
   student     User     @relation("StudentProject", fields: [studentId], references: [id], onDelete: Cascade)
   
   teacherId   String
   teacher     User     @relation("TeacherProject", fields: [teacherId], references: [id], onDelete: Restrict)
   
+  poolId      String?
+  pool        Pool?    @relation(fields: [poolId], references: [id])
+
   chapters    Chapter[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([studentId, poolId])
 }
 
 model Chapter {
@@ -58,4 +64,28 @@ model Chapter {
   updatedAt   DateTime @updatedAt
 
   @@unique([projectId, order])
+}
+
+model Pool {
+  id            String        @id @default(uuid())
+  name          String
+  year          Int           // напр. 2026
+  semester      String        // напр. "1 семестр" або "2 півріччя"
+  workType      String        // напр. "Курсова робота" або "Дипломна робота"
+  groupPatterns String        // e.g. "ІПЗ-2*"
+  teachers      PoolTeacher[]
+  projects      Project[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model PoolTeacher {
+  id        String @id @default(uuid())
+  poolId    String
+  pool      Pool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  capacity  Int
+  
+  @@unique([poolId, teacherId])
 }

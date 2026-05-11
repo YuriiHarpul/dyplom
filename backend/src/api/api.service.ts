@@ -40,8 +40,9 @@ export class ApiService {
       select: { 
         id: true, name: true, email: true, role: true, group: true, course: true, capacity: true,
         _count: { select: { teacherProjects: true } },
-        studentProject: {
+        studentProjects: {
           select: {
+            pool: { select: { name: true } },
             teacher: { select: { id: true, name: true } }
           }
         }
@@ -56,13 +57,14 @@ export class ApiService {
     });
   }
 
-  async assignTeacher(studentId: string, teacherId: string) {
+  async assignTeacher(studentId: string, teacherId: string, poolId: string) {
     return this.prisma.project.upsert({
-      where: { studentId },
+      where: { studentId_poolId: { studentId, poolId } },
       update: { teacherId },
       create: {
         studentId,
         teacherId,
+        poolId,
         title: 'Тему не обрано',
         status: 'PENDING',
       },
@@ -75,19 +77,20 @@ export class ApiService {
       return this.prisma.project.findMany({ include: { student: true, teacher: true, chapters: true } });
     }
     if (role === 'TEACHER') {
-      return this.prisma.project.findMany({ where: { teacherId: userId }, include: { student: true, teacher: true, chapters: true } });
+      return this.prisma.project.findMany({ where: { teacherId: userId }, include: { student: true, teacher: true, pool: true, chapters: true } });
     }
     if (role === 'STUDENT') {
-      return this.prisma.project.findUnique({ where: { studentId: userId }, include: { student: true, teacher: true, chapters: true } });
+      return this.prisma.project.findMany({ where: { studentId: userId }, include: { student: true, teacher: true, pool: true, chapters: true } });
     }
     return [];
   }
 
-  async createProjectRequest(studentId: string, title: string, teacherId: string) {
+  async createProjectRequest(studentId: string, title: string, teacherId: string, poolId: string) {
     return this.prisma.project.create({
       data: {
         studentId,
         teacherId,
+        poolId,
         title,
         status: 'PENDING',
       },
@@ -160,5 +163,93 @@ export class ApiService {
       where: { id: chapterId },
       data: { status: 'REWORK' },
     });
+  }
+
+  // --- Pools ---
+  async getPools() {
+    return this.prisma.pool.findMany({
+      include: {
+        teachers: {
+          include: {
+            teacher: { select: { id: true, name: true, email: true } }
+          }
+        }
+      }
+    });
+  }
+
+  async createPool(name: string, year: number, semester: string, workType: string, groupPatterns: string) {
+    return this.prisma.pool.create({
+      data: { name, year, semester, workType, groupPatterns }
+    });
+  }
+
+  async addTeacherToPool(poolId: string, teacherId: string, capacity: number) {
+    return this.prisma.poolTeacher.upsert({
+      where: { poolId_teacherId: { poolId, teacherId } },
+      update: { capacity },
+      create: { poolId, teacherId, capacity }
+    });
+  }
+
+  async removeTeacherFromPool(poolId: string, teacherId: string) {
+    return this.prisma.poolTeacher.delete({
+      where: { poolId_teacherId: { poolId, teacherId } }
+    });
+  }
+
+  async deletePool(poolId: string) {
+    return this.prisma.pool.delete({
+      where: { id: poolId }
+    });
+  }
+
+  // --- Student Specific ---
+  async getAvailablePoolsForStudent(studentId: string) {
+    const student = await this.prisma.user.findUnique({ where: { id: studentId } });
+    if (!student || !student.group) return [];
+
+    const pools = await this.prisma.pool.findMany({
+      include: {
+        projects: { where: { studentId } }
+      }
+    });
+
+    return pools.filter(pool => {
+      const patterns = pool.groupPatterns.split(',').map(p => p.trim());
+      return patterns.some(pattern => {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        return regex.test(student.group!);
+      });
+    });
+  }
+
+  async getTeachersInPool(poolId: string) {
+    const poolTeachers = await this.prisma.poolTeacher.findMany({
+      where: { poolId },
+      include: {
+        teacher: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        }
+      }
+    });
+
+    // For each teacher, count their projects IN THIS POOL
+    const results = await Promise.all(poolTeachers.map(async (pt) => {
+      const count = await this.prisma.project.count({
+        where: { teacherId: pt.teacherId, poolId }
+      });
+      return {
+        ...pt.teacher,
+        capacity: pt.capacity,
+        used: count
+      };
+    }));
+
+    return results;
   }
 }
