@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as xlsx from 'xlsx';
+import * as fs from 'fs';
 
 @Injectable()
 export class UploadService {
     constructor(private prisma: PrismaService) { }
 
-    async handleExcelUpload(buffer: Buffer) {
+    async handleExcelUpload(filePath: string, fileName: string, fileUrl: string) {
+        const buffer = fs.readFileSync(filePath);
         const workbook = xlsx.read(buffer, { type: 'buffer' });
         let importedCount = 0;
+        const parsedItems = [];
 
         for (const sheetName of workbook.SheetNames) {
             const sheet = workbook.Sheets[sheetName];
@@ -41,13 +44,21 @@ export class UploadService {
                 if (
                     !studentName ||
                     !title ||
-                    !teacherName ||
-                    studentName.includes('Прізвище') ||
-                    title.includes('Теми курсових') ||
-                    title.includes('Теми кваліфікаційних') ||
-                    title.includes('Теми магістерських')
+                    !teacherName
                 )
                     continue;
+
+                const studentNameLower = studentName.toLowerCase();
+                const teacherNameLower = teacherName.toLowerCase();
+                const titleLower = title.toLowerCase();
+
+                const isStudentHeader = ['прізвище', 'імя', 'по батькові', 'студент', 'підпис', '№', 'з/п'].some(kw => studentNameLower.includes(kw));
+                const isTeacherHeader = ['керівник', 'підрозділ', 'навчальн', 'структурн', 'завідувач', 'декан', 'комісія', 'викладач'].some(kw => teacherNameLower.includes(kw));
+                const isTitleHeader = ['теми курсових', 'теми кваліфікаційних', 'теми магістерських', 'короткий опис завдання', 'назва теми', 'тема роботи', 'тема'].some(kw => titleLower === kw || titleLower.startsWith(kw));
+
+                if (isStudentHeader || isTeacherHeader || isTitleHeader) {
+                    continue;
+                }
 
                 let group: string | null = row[18]?.toString().trim() || null;
                 if (!group && currentCourse) group = currentCourse;
@@ -105,10 +116,30 @@ export class UploadService {
                     });
                 }
 
+                parsedItems.push({ studentName, title, teacherName, group });
+
                 importedCount++;
             }
         }
 
+        await this.prisma.importedFile.create({
+            data: {
+                fileName,
+                fileUrl,
+                parsedData: JSON.stringify(parsedItems),
+            }
+        });
+
         return { success: true, count: importedCount };
+    }
+
+    async saveDocument(projectId: string, fileName: string, fileUrl: string) {
+        return this.prisma.projectDocument.create({
+            data: {
+                projectId,
+                fileName,
+                fileUrl,
+            }
+        });
     }
 }

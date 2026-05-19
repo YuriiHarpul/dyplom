@@ -97,13 +97,6 @@ export default function Home() {
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    // Якщо нічого не обрано, очищуємо результати і виходимо
-    if (!debouncedQuery.trim() && !selectedTeacher && !selectedSemester) {
-      setResults([]);
-      setHasSearched(false);
-      return;
-    }
-
     setIsSearching(true);
     setHasSearched(true);
 
@@ -168,7 +161,7 @@ export default function Home() {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isSearching || (!query.trim() && !selectedTeacher && !selectedSemester)}
+              disabled={isSearching}
               style={{ position: "absolute", right: "8px", top: "8px", bottom: "8px", padding: "0 1.5rem" }}
             >
               {isSearching ? <Loader2 className="animate-spin" size={20} /> : <><Search size={18} style={{ marginRight: "8px" }} /> Знайти</>}
@@ -230,7 +223,9 @@ export default function Home() {
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
               <h3 style={{ display: "flex", alignItems: "center" }}>
-                <span style={{ color: "var(--text-primary)" }}>Результати пошуку: </span>
+                <span style={{ color: "var(--text-primary)" }}>
+                  {debouncedQuery.trim() || selectedTeacher || selectedSemester ? "Результати пошуку: " : "Всі проєкти кафедри: "}
+                </span>
                 <span style={{ color: "var(--success-color)", marginLeft: "8px" }}> {visibleResults.length === 100 ? "100+ (Показано перші 100)" : visibleResults.length}</span>
               </h3>
             </div>

@@ -19,6 +19,9 @@ export default function AdminPage() {
 
     const [poolsList, setPoolsList] = useState<any[]>([]);
     const [loadingPools, setLoadingPools] = useState(true);
+    
+    const [importsList, setImportsList] = useState<any[]>([]);
+    const [loadingImports, setLoadingImports] = useState(true);
     const [newPoolName, setNewPoolName] = useState("");
     const [newPoolYear, setNewPoolYear] = useState(new Date().getFullYear());
     const [newPoolSemester, setNewPoolSemester] = useState("1 семестр");
@@ -54,7 +57,20 @@ export default function AdminPage() {
         setUser(parsedUser);
         fetchUsers();
         fetchPools();
+        fetchImports();
     }, []);
+
+    const fetchImports = async () => {
+        setLoadingImports(true);
+        try {
+            const res = await fetch('http://localhost:3001/api/admin/imports');
+            if (res.ok) {
+                const data = await res.json();
+                setImportsList(data);
+            }
+        } catch (e) { console.error(e); }
+        finally { setLoadingImports(false); }
+    };
 
     const fetchUsers = async () => {
         setLoadingUsers(true);
@@ -249,6 +265,7 @@ export default function AdminPage() {
                 setMessage({ type: "success", text: `Успішно імпортовано ${data.count} проєктів з БД!` });
                 setFile(null);
                 fetchUsers(); // Оновити список юзерів
+                fetchImports();
             } else {
                 setMessage({ type: "error", text: data.error || "Помилка при завантаженні файлу" });
             }
@@ -261,6 +278,24 @@ export default function AdminPage() {
     };
 
 
+
+    const handleDeleteImport = async (id: string) => {
+        if (!confirm("Ви впевнені, що хочете видалити цей файл з історії? Це не видалить вже створених студентів чи викладачів.")) return;
+        try {
+            const res = await fetch(`http://localhost:3001/api/admin/imports/${id}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                alert('Імпорт успішно видалено з історії!');
+                fetchImports();
+            } else {
+                alert('Не вдалося видалити імпорт.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Помилка при видаленні імпорту');
+        }
+    };
 
     const getFilteredUsers = () => {
         let list = usersList.filter(u => {
@@ -685,55 +720,140 @@ export default function AdminPage() {
 
                 {/* Вкладка 3: Імпорт */}
                 {activeTab === 'UPLOAD' && (
-                    <div className="glass-panel animate-fade-in" style={{ padding: "2rem" }}>
-                        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-                            <h3>Імпорт бази дипломів (XLSX)</h3>
-                            <p style={{ color: "var(--text-secondary)" }}>Автоматичне створення студентів, викладачів та проєктів з Excel файлу</p>
-                        </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                        <div className="glass-panel animate-fade-in" style={{ padding: "2rem" }}>
+                            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+                                <h3>Імпорт бази дипломів (XLSX)</h3>
+                                <p style={{ color: "var(--text-secondary)" }}>Автоматичне створення студентів, викладачів та проєктів з Excel файлу</p>
+                            </div>
 
-                        <div
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                            style={{
-                                border: `2px dashed ${file ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                                borderRadius: "12px",
-                                padding: "3rem 2rem",
-                                textAlign: "center",
-                                backgroundColor: file ? "rgba(46, 125, 50, 0.05)" : "rgba(0,0,0,0.02)",
-                                transition: "all 0.3s ease",
-                                marginBottom: "2rem",
-                                cursor: "pointer"
-                            }}
-                            onClick={() => document.getElementById("file-upload")?.click()}
-                        >
-                            <input type="file" id="file-upload" style={{ display: "none" }} accept=".xlsx,.pdf" onChange={handleFileChange} />
-                            {file ? (
-                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-                                    <FileType size={48} color="var(--primary-color)" />
-                                    <div>
-                                        <strong style={{ fontSize: "1.2rem", display: "block" }}>{file.name}</strong>
-                                        <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>{(file.size / 1024).toFixed(1)} KB</span>
+                            <div
+                                onDragOver={handleDragOver}
+                                onDrop={handleDrop}
+                                style={{
+                                    border: `2px dashed ${file ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                                    borderRadius: "12px",
+                                    padding: "3rem 2rem",
+                                    textAlign: "center",
+                                    backgroundColor: file ? "rgba(46, 125, 50, 0.05)" : "rgba(0,0,0,0.02)",
+                                    transition: "all 0.3s ease",
+                                    marginBottom: "2rem",
+                                    cursor: "pointer"
+                                }}
+                                onClick={() => document.getElementById("file-upload")?.click()}
+                            >
+                                <input type="file" id="file-upload" style={{ display: "none" }} accept=".xlsx,.pdf" onChange={handleFileChange} />
+                                {file ? (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                                        <FileType size={48} color="var(--primary-color)" />
+                                        <div>
+                                            <strong style={{ fontSize: "1.2rem", display: "block" }}>{file.name}</strong>
+                                            <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>{(file.size / 1024).toFixed(1)} KB</span>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", color: "var(--text-secondary)" }}>
-                                    <UploadCloud size={48} />
-                                    <div><strong style={{ fontSize: "1.1rem", display: "block", color: "var(--text-primary)" }}>Перетягніть файл сюди</strong><span>або натисніть для вибору</span></div>
+                                ) : (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", color: "var(--text-secondary)" }}>
+                                        <UploadCloud size={48} />
+                                        <div><strong style={{ fontSize: "1.1rem", display: "block", color: "var(--text-primary)" }}>Перетягніть файл сюди</strong><span>або натисніть для вибору</span></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {message && (
+                                <div style={{ padding: "1rem 1.5rem", borderRadius: "8px", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "0.5rem", backgroundColor: message.type === 'success' ? "rgba(46, 125, 50, 0.1)" : "rgba(220, 38, 38, 0.1)", border: `1px solid ${message.type === 'success' ? "var(--success-color)" : "var(--danger-color)"}`, color: message.type === 'success' ? "var(--success-color)" : "var(--danger-color)" }}>
+                                    {message.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
+                                    {message.text}
                                 </div>
                             )}
+
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem" }}>
+                                <button className="btn btn-primary" onClick={handleUpload} disabled={!file || isUploading}>
+                                    {isUploading ? <><Loader2 className="animate-spin" size={18} style={{ marginRight: "8px" }} /> Завантаження...</> : <><UploadCloud size={18} style={{ marginRight: "8px" }} /> Імпортувати в БД</>}
+                                </button>
+                            </div>
                         </div>
 
-                        {message && (
-                            <div style={{ padding: "1rem 1.5rem", borderRadius: "8px", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "0.5rem", backgroundColor: message.type === 'success' ? "rgba(46, 125, 50, 0.1)" : "rgba(220, 38, 38, 0.1)", border: `1px solid ${message.type === 'success' ? "var(--success-color)" : "var(--danger-color)"}`, color: message.type === 'success' ? "var(--success-color)" : "var(--danger-color)" }}>
-                                {message.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-                                {message.text}
-                            </div>
-                        )}
+                        {/* Історія імпортів */}
+                        <div className="glass-panel" style={{ padding: '2rem' }}>
+                            <h3 style={{ marginBottom: '1.5rem' }}>Історія імпортованих баз</h3>
+                            {loadingImports ? (
+                                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                                    <Loader2 className="animate-spin" size={32} style={{ margin: '0 auto 1rem' }} />
+                                    Завантаження історії...
+                                </div>
+                            ) : importsList.length === 0 ? (
+                                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem', border: '1px dashed var(--border-color)', borderRadius: '12px' }}>
+                                    Історія імпортів порожня. Завантажте свій перший Excel файл.
+                                </div>
+                            ) : (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                    {importsList.map((imp: any) => {
+                                        let count = 0;
+                                        try {
+                                            const parsed = JSON.parse(imp.parsedData);
+                                            count = parsed.length;
+                                        } catch (e) {}
+                                        
+                                        return (
+                                            <div 
+                                                key={imp.id} 
+                                                className="hover-scale"
+                                                style={{ 
+                                                    background: 'var(--bg-secondary)', 
+                                                    border: '1px solid var(--border-color)', 
+                                                    borderRadius: '12px', 
+                                                    padding: '1.5rem',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    justifyContent: 'space-between',
+                                                    minHeight: '180px',
+                                                    position: 'relative',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => window.open(`/admin/imports/${imp.id}`, '_blank')}
+                                            >
+                                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                                                    <FileType size={36} color="var(--primary-color)" style={{ flexShrink: 0 }} />
+                                                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                                        <h4 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={imp.fileName}>{imp.fileName}</h4>
+                                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>
+                                                            {new Date(imp.createdAt).toLocaleString('uk-UA')}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div style={{ marginTop: '1rem' }}>
+                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                                        Імпортовано записів: <strong style={{ color: 'var(--text-primary)' }}>{count}</strong>
+                                                    </div>
+                                                </div>
 
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem" }}>
-                            <button className="btn btn-primary" onClick={handleUpload} disabled={!file || isUploading}>
-                                {isUploading ? <><Loader2 className="animate-spin" size={18} style={{ marginRight: "8px" }} /> Завантаження...</> : <><UploadCloud size={18} style={{ marginRight: "8px" }} /> Імпортувати в БД</>}
-                            </button>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                                                    <span style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 600 }}>Переглянути дані</span>
+                                                    <button 
+                                                        className="btn btn-danger"
+                                                        style={{ 
+                                                            padding: '0.4rem', 
+                                                            background: 'rgba(239, 68, 68, 0.1)', 
+                                                            color: 'var(--danger-color)', 
+                                                            border: 'none', 
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteImport(imp.id);
+                                                        }}
+                                                        title="Видалити з історії"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

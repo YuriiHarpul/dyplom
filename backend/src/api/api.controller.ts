@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Patch, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiService } from './api.service';
 
 @Controller('api')
@@ -60,6 +60,21 @@ export class ApiController {
     return this.apiService.approveTitleChange(id);
   }
 
+  @Post('projects/:id/github')
+  updateGithubUrl(@Param('id') id: string, @Body('githubUrl') githubUrl: string) {
+    return this.apiService.updateGithubUrl(id, githubUrl);
+  }
+
+  @Post('projects/:id/toggle-publication')
+  togglePublication(@Param('id') id: string) {
+    return this.apiService.togglePublication(id);
+  }
+
+  @Post('projects/:id/publications')
+  updatePublications(@Param('id') id: string, @Body('publications') publications: string) {
+    return this.apiService.updatePublications(id, publications);
+  }
+
   @Post('chapters/:id/submit')
   submitChapter(@Param('id') id: string) {
     return this.apiService.submitChapter(id);
@@ -114,6 +129,27 @@ export class ApiController {
   @Delete('admin/pools/:id')
   deletePool(@Param('id') poolId: string) {
     return this.apiService.deletePool(poolId);
+  }
+
+  // --- Admin Imports ---
+  @Get('admin/imports')
+  getImports() {
+    return this.apiService.getImports();
+  }
+
+  @Get('admin/imports/:id')
+  getImportById(@Param('id') id: string) {
+    return this.apiService.getImportById(id);
+  }
+
+  @Put('admin/imports/:id')
+  updateImportData(@Param('id') id: string, @Body() body: { items: any[] }) {
+    return this.apiService.updateImportData(id, body.items);
+  }
+
+  @Delete('admin/imports/:id')
+  deleteImport(@Param('id') id: string) {
+    return this.apiService.deleteImport(id);
   }
 
   // --- Student Pool Endpoints ---

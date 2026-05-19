@@ -33,6 +33,7 @@ model Project {
   semester    String?  // Семестр/дисципліна
   
   proposedTitle String? // Нова тема (якщо студент подав запит на зміну)
+  githubUrl     String? // Посилання на GitHub репозиторій
   
   studentId   String
   student     User     @relation("StudentProject", fields: [studentId], references: [id], onDelete: Cascade)
@@ -44,6 +45,10 @@ model Project {
   pool        Pool?    @relation(fields: [poolId], references: [id])
 
   chapters    Chapter[]
+  documents   ProjectDocument[]
+  
+  requiresPublication Boolean @default(false)
+  publications        String?
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -64,6 +69,15 @@ model Chapter {
   updatedAt   DateTime @updatedAt
 
   @@unique([projectId, order])
+}
+
+model ProjectDocument {
+  id          String   @id @default(uuid())
+  fileName    String   // Назва файлу (напр. "Курсова_Іванов.pdf")
+  fileUrl     String   // Шлях до збереженого файлу на сервері
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
 }
 
 model Pool {
@@ -88,4 +102,12 @@ model PoolTeacher {
   capacity  Int
   
   @@unique([poolId, teacherId])
+}
+
+model ImportedFile {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileUrl     String
+  parsedData  String
+  createdAt   DateTime @default(now())
 }

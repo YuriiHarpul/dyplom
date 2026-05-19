@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, X, RefreshCw, FileText, CheckCircle, AlertCircle, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, RefreshCw, FileText, CheckCircle, AlertCircle, Search, ChevronDown, ChevronUp, Github, FileDown } from 'lucide-react';
 import { calculateSearchScore } from '@/utils/search';
 
 export default function TeacherDashboard() {
@@ -64,6 +64,11 @@ export default function TeacherDashboard() {
 
   const reworkChapter = async (chapterId: string) => {
     await fetch(`http://localhost:3001/api/chapters/${chapterId}/rework`, { method: 'POST' });
+    fetchData(user.id);
+  };
+
+  const togglePublication = async (projectId: string) => {
+    await fetch(`http://localhost:3001/api/projects/${projectId}/toggle-publication`, { method: 'POST' });
     fetchData(user.id);
   };
 
@@ -187,6 +192,75 @@ export default function TeacherDashboard() {
                           <button onClick={() => approveTitleChange(p.id)} className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>Дозволити зміну</button>
                         </div>
                       )}
+
+                      {/* GitHub Link */}
+                      {p.githubUrl && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <h5 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Репозиторій коду</h5>
+                          <a href={p.githubUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--primary-color)', textDecoration: 'none', fontWeight: 500, transition: 'all 0.2s' }} className="hover-scale">
+                            <Github size={18} /> Відкрити GitHub
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Публікації */}
+                      <div style={{ marginBottom: '1.5rem', padding: '1.5rem', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: p.requiresPublication ? '1rem' : '0' }}>
+                          <input 
+                            type="checkbox" 
+                            id={`pub-${p.id}`} 
+                            checked={p.requiresPublication} 
+                            onChange={() => togglePublication(p.id)}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                          <label htmlFor={`pub-${p.id}`} style={{ fontWeight: 600, cursor: 'pointer' }}>Вимагати наявність публікацій</label>
+                        </div>
+                        
+                        {p.requiresPublication && (
+                          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--border-color)' }}>
+                            <h5 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Додані публікації:</h5>
+                            {p.publications ? (
+                              <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.02)', borderRadius: '6px', whiteSpace: 'pre-wrap', fontSize: '0.9rem', borderLeft: '3px solid var(--primary-color)' }}>
+                                {p.publications}
+                              </div>
+                            ) : (
+                              <div style={{ padding: '1rem', color: 'var(--danger-color)', fontStyle: 'italic', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '6px' }}>
+                                Студент ще не додав інформацію про публікації.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Завантажені документи */}
+                      <div style={{ marginBottom: '1.5rem' }}>
+                        <h5 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Завантажені документи</h5>
+                        {(!p.documents || p.documents.length === 0) ? (
+                          <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontStyle: 'italic', background: 'rgba(0,0,0,0.02)', borderRadius: '6px' }}>
+                            Студент ще не завантажив жодного файлу.
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {p.documents.map((doc: any, idx: number) => (
+                              <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <FileText size={20} color="var(--primary-color)" />
+                                  <div>
+                                    <div style={{ fontWeight: 500, fontSize: '0.95rem' }}>{doc.fileName}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                      {new Date(doc.createdAt).toLocaleString('uk-UA')} 
+                                      {idx === 0 && <span style={{ marginLeft: '0.5rem', background: 'var(--success-color)', color: 'white', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem' }}>НАЙНОВІША ВЕРСІЯ</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                                <a href={`http://localhost:3001${doc.fileUrl}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <FileDown size={16} /> Завантажити
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Розділи */}
                       <div>

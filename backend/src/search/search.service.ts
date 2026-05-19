@@ -25,9 +25,15 @@ export class SearchService {
         if (teacher) whereClause.teacher = { name: teacher };
         if (semester) whereClause.semester = semester;
 
-        // If no filters and no query, return empty
+        // If no filters and no query, return ALL projects (limited to first 100)
         if (!query && !teacher && !semester) {
-            return { results: [] };
+            const allProjects = await this.prisma.project.findMany({
+                include: { student: true, teacher: true },
+                orderBy: { createdAt: 'desc' }
+            });
+            return {
+                results: allProjects.slice(0, 100).map(p => ({ item: p, score: 1 }))
+            };
         }
 
         const allProjects = await this.prisma.project.findMany({

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class ApiService {
@@ -36,7 +38,13 @@ export class ApiService {
   // --- Users ---
   async getUsers(role?: string) {
     return this.prisma.user.findMany({
-      where: role ? { role } : undefined,
+      where: {
+        ...(role ? { role } : {}),
+        NOT: [
+          { email: { startsWith: 'teacher_' } },
+          { email: { startsWith: 'student_' } },
+        ]
+      },
       select: { 
         id: true, name: true, email: true, role: true, group: true, course: true, capacity: true,
         _count: { select: { teacherProjects: true } },
@@ -71,16 +79,15 @@ export class ApiService {
     });
   }
 
-  // --- Projects ---
   async getProjects(userId: string, role: string) {
     if (role === 'ADMIN') {
-      return this.prisma.project.findMany({ include: { student: true, teacher: true, chapters: true } });
+      return this.prisma.project.findMany({ include: { student: true, teacher: true, chapters: true, documents: { orderBy: { createdAt: 'desc' } } } });
     }
     if (role === 'TEACHER') {
-      return this.prisma.project.findMany({ where: { teacherId: userId }, include: { student: true, teacher: true, pool: true, chapters: true } });
+      return this.prisma.project.findMany({ where: { teacherId: userId }, include: { student: true, teacher: true, pool: true, chapters: true, documents: { orderBy: { createdAt: 'desc' } } } });
     }
     if (role === 'STUDENT') {
-      return this.prisma.project.findMany({ where: { studentId: userId }, include: { student: true, teacher: true, pool: true, chapters: true } });
+      return this.prisma.project.findMany({ where: { studentId: userId }, include: { student: true, teacher: true, pool: true, chapters: true, documents: { orderBy: { createdAt: 'desc' } } } });
     }
     return [];
   }
@@ -143,6 +150,30 @@ export class ApiService {
     });
   }
 
+  async updateGithubUrl(projectId: string, githubUrl: string) {
+    return this.prisma.project.update({
+      where: { id: projectId },
+      data: { githubUrl },
+    });
+  }
+
+  async togglePublication(projectId: string) {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException();
+    
+    return this.prisma.project.update({
+      where: { id: projectId },
+      data: { requiresPublication: !project.requiresPublication },
+    });
+  }
+
+  async updatePublications(projectId: string, publications: string) {
+    return this.prisma.project.update({
+      where: { id: projectId },
+      data: { publications },
+    });
+  }
+
   // --- Chapters ---
   async submitChapter(chapterId: string) {
     return this.prisma.chapter.update({
@@ -201,6 +232,45 @@ export class ApiService {
   async deletePool(poolId: string) {
     return this.prisma.pool.delete({
       where: { id: poolId }
+    });
+  }
+
+  async getImports() {
+    return this.prisma.importedFile.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getImportById(id: string) {
+    const file = await this.prisma.importedFile.findUnique({ where: { id } });
+    if (!file) throw new NotFoundException('Файл не знайдено');
+    return file;
+  }
+
+  async updateImportData(id: string, items: any[]) {
+    const file = await this.prisma.importedFile.findUnique({ where: { id } });
+    if (!file) throw new NotFoundException('Файл не знайдено');
+
+    return this.prisma.importedFile.update({
+      where: { id },
+      data: {
+        parsedData: JSON.stringify(items),
+      },
+    });
+  }
+
+  async deleteImport(id: string) {
+    const file = await this.prisma.importedFile.findUnique({ where: { id } });
+    if (!file) throw new NotFoundException('Файл не знайдено');
+
+    // Remove from disk
+    const filePath = path.join(process.cwd(), file.fileUrl);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    return this.prisma.importedFile.delete({
+      where: { id },
     });
   }
 

@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, CheckCircle, Clock, AlertCircle, Edit3, Send } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, AlertCircle, Edit3, Send, Github, FileUp, FileText } from 'lucide-react';
 
 export default function StudentDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]); // plural
   const [teachers, setTeachers] = useState<any[]>([]);
-  
+
   // Form states
   const [title, setTitle] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
@@ -69,9 +69,9 @@ export default function StudentDashboard() {
     await fetch('http://localhost:3001/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        studentId: user.id, 
-        title, 
+      body: JSON.stringify({
+        studentId: user.id,
+        title,
         teacherId: selectedTeacher.id,
         poolId: selectedPoolId
       }),
@@ -97,6 +97,43 @@ export default function StudentDashboard() {
     fetchData(user.id);
   };
 
+  const updateGithubUrl = async (projectId: string, url: string) => {
+    await fetch(`http://localhost:3001/api/projects/${projectId}/github`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ githubUrl: url }),
+    });
+    fetchData(user.id);
+  };
+
+  const updatePublications = async (projectId: string, text: string) => {
+    await fetch(`http://localhost:3001/api/projects/${projectId}/publications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publications: text }),
+    });
+    fetchData(user.id);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, projectId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('projectId', projectId);
+
+    try {
+      await fetch('http://localhost:3001/upload/document', {
+        method: 'POST',
+        body: formData,
+      });
+      fetchData(user.id);
+    } catch (e) {
+      console.error('Upload failed', e);
+    }
+  };
+
 
 
   if (loading) return <div className="container" style={{ padding: '3rem', textAlign: 'center' }}>Завантаження...</div>;
@@ -111,21 +148,21 @@ export default function StudentDashboard() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        
+
         {/* Плитки завдань (Пулів) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
           {availablePools.map(pool => {
             const project = projects.find(p => p.poolId === pool.id);
             const isSelected = selectedPoolId === pool.id;
-            
+
             return (
-              <div 
-                key={pool.id} 
+              <div
+                key={pool.id}
                 onClick={() => setSelectedPoolId(pool.id)}
-                style={{ 
-                  padding: '1.5rem', 
-                  borderRadius: '16px', 
-                  border: isSelected ? '2px solid var(--primary-color)' : '1px solid var(--border-color)', 
+                style={{
+                  padding: '1.5rem',
+                  borderRadius: '16px',
+                  border: isSelected ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
                   background: isSelected ? 'rgba(46, 125, 50, 0.05)' : 'var(--bg-secondary)',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
@@ -159,7 +196,7 @@ export default function StudentDashboard() {
             {(() => {
               const project = projects.find(p => p.poolId === selectedPoolId);
               const pool = availablePools.find(p => p.id === selectedPoolId);
-              
+
               if (!project) {
                 // Форма вибору керівника
                 return (
@@ -216,7 +253,7 @@ export default function StudentDashboard() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                            <Clock size={16} /> 
+                            <Clock size={16} />
                             <span>Статус проєкту: <strong>{project.status === 'PENDING' ? 'Очікує підтвердження' : project.status === 'REJECTED' ? 'Відхилено' : 'Затверджено'}</strong></span>
                           </div>
                           <h3 style={{ fontSize: '1.8rem', color: 'var(--primary-color)', margin: '0.5rem 0' }}>{project.title}</h3>
@@ -243,7 +280,94 @@ export default function StudentDashboard() {
                           )}
                         </div>
                       )}
+
+                      {project.status === 'APPROVED' && (
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                          <h4 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Github size={18} /> Репозиторій коду (GitHub)</h4>
+                          <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const url = (e.target as any).elements.githubUrl.value;
+                            updateGithubUrl(project.id, url);
+                          }} style={{ display: 'flex', gap: '1rem' }}>
+                            <input name="githubUrl" type="url" className="input-control" defaultValue={project.githubUrl || ''} placeholder="https://github.com/посилання" style={{ flex: 1 }} />
+                            <button type="submit" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>Зберегти</button>
+                          </form>
+                        </div>
+                      )}
+
+                      {/* Публікації */}
+                      {project.status === 'APPROVED' && project.requiresPublication && (
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                          <h4 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><BookOpen size={18} /> Наукові публікації</h4>
+                          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                            Ваш керівник вимагає додати інформацію про наукові публікації (наприклад, тези на конференцію). Введіть бібліографічний опис або посилання нижче:
+                          </p>
+                          <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const text = (e.target as any).elements.publications.value;
+                            updatePublications(project.id, text);
+                          }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <textarea 
+                              name="publications" 
+                              className="input-control" 
+                              rows={4}
+                              defaultValue={project.publications || ''} 
+                              placeholder="Гарпуль Ю. В. Назва статті // Матеріали конференції..." 
+                              style={{ resize: 'vertical' }}
+                            ></textarea>
+                            <div style={{ alignSelf: 'flex-end' }}>
+                              <button type="submit" className="btn btn-primary">Зберегти публікації</button>
+                            </div>
+                          </form>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Завантаження документів */}
+                    {project.status === 'APPROVED' && (
+                      <div className="glass-panel" style={{ padding: '2.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                          <h3 style={{ margin: 0 }}>Файли роботи (PDF)</h3>
+                          <div>
+                            <input 
+                              type="file" 
+                              id={`file-upload-${project.id}`} 
+                              style={{ display: 'none' }} 
+                              accept=".pdf" 
+                              onChange={(e) => handleFileUpload(e, project.id)} 
+                            />
+                            <button 
+                              className="btn btn-primary" 
+                              onClick={() => document.getElementById(`file-upload-${project.id}`)?.click()}
+                              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                            >
+                              <FileUp size={18} /> Завантажити нову версію
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {(!project.documents || project.documents.length === 0) ? (
+                            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', border: '1px dashed var(--border-color)', borderRadius: '12px' }}>
+                              Ви ще не завантажили жодного файлу.
+                            </div>
+                          ) : (
+                            project.documents.map((doc: any, idx: number) => (
+                              <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                  <FileText size={24} color="var(--primary-color)" />
+                                  <div>
+                                    <div style={{ fontWeight: 500 }}>{doc.fileName}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(doc.createdAt).toLocaleString('uk-UA')} {idx === 0 && <span style={{ marginLeft: '0.5rem', background: 'var(--success-color)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>НАЙНОВІША</span>}</div>
+                                  </div>
+                                </div>
+                                <a href={`http://localhost:3001${doc.fileUrl}`} target="_blank" rel="noopener noreferrer" className="btn" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>Переглянути</a>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Прогрес по розділах */}
                     {project.status === 'APPROVED' && project.chapters && (
@@ -253,24 +377,24 @@ export default function StudentDashboard() {
                           {project.chapters.sort((a: any, b: any) => a.order - b.order).map((chapter: any) => (
                             <div key={chapter.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'var(--bg-secondary)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                                <div style={{ 
-                                  width: '36px', 
-                                  height: '36px', 
-                                  borderRadius: '50%', 
-                                  background: chapter.status === 'APPROVED' ? 'var(--success-color)' : 'rgba(0,0,0,0.05)', 
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '50%',
+                                  background: chapter.status === 'APPROVED' ? 'var(--success-color)' : 'rgba(0,0,0,0.05)',
                                   color: chapter.status === 'APPROVED' ? 'white' : 'inherit',
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center', 
-                                  fontWeight: 700 
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 700
                                 }}>
                                   {chapter.status === 'APPROVED' ? <CheckCircle size={20} /> : chapter.order}
                                 </div>
                                 <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>{chapter.title}</span>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                <span style={{ 
-                                  fontSize: '0.9rem', 
+                                <span style={{
+                                  fontSize: '0.9rem',
                                   fontWeight: 600,
                                   color: chapter.status === 'SUBMITTED' ? '#f59e0b' : chapter.status === 'REWORK' ? 'var(--danger-color)' : 'var(--text-secondary)'
                                 }}>
