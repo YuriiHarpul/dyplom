@@ -456,7 +456,7 @@ export default function AdminPage() {
                                                 <td>{u.group || '-'}</td>
                                                 <td>
                                                     {u.role === 'STUDENT' ? (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                                             {u.studentProjects?.map((p: any, idx: number) => (
                                                                 <div key={p.pool?.name || idx} style={{ fontSize: '0.85rem', padding: '0.3rem', background: 'rgba(0,0,0,0.02)', borderRadius: '4px' }}>
                                                                     <span style={{ fontWeight: 600, color: 'var(--primary-color)' }}>{p.pool?.name || 'Без пулу'}:</span> {p.teacher?.name || 'Не призначено'}
@@ -465,6 +465,20 @@ export default function AdminPage() {
                                                             {(!u.studentProjects || u.studentProjects.length === 0) && (
                                                                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Немає активних проєктів</span>
                                                             )}
+                                                            <select
+                                                                className="input-control"
+                                                                style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', width: 'auto', marginTop: '0.2rem' }}
+                                                                defaultValue=""
+                                                                onChange={(e) => {
+                                                                    if (e.target.value) handleAssignTeacher(u.id, e.target.value);
+                                                                    e.target.value = '';
+                                                                }}
+                                                            >
+                                                                <option value="">✏️ Змінити керівника...</option>
+                                                                {teachersList.map((t: any) => (
+                                                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                                                ))}
+                                                            </select>
                                                         </div>
                                                     ) : '-'}
                                                 </td>

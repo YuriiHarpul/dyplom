@@ -4,15 +4,13 @@
  */
 export function stemUkrainian(word: string): string {
     word = word.toLowerCase().replace(/['ʼ]/g, '').replace(/ь$/, '');
-    
+
     if (word.length <= 3) return word;
 
     const patterns = [
-        // Step 1: Longest suffixes first
         /(ивними|івськими|івською|івський|івська|івське|івську|ованого|ованому|ованим|ованих|ованими)$/,
         /(анням|енням|інню|янню|цями|цями|ями|ами|ицями|ицями|ання|ення)$/,
         /(ськими|ськой|ською|ськи|ську|ськи)$/,
-        // Step 2: Medium suffixes
         /(ими|іми|ого|ому|им|ім|их|іх|ах|ях|ів|ій|ий|ій|а|я|е|є|о|у|и|і|й)$/,
         /(ити|іти|яти|увати|ювати|ти)$/,
     ];
@@ -20,7 +18,6 @@ export function stemUkrainian(word: string): string {
     let stemmed = word;
     for (const p of patterns) {
         const next = stemmed.replace(p, '');
-        // Do not over-stem: root must be at least 3 chars
         if (next.length >= 3) {
             stemmed = next;
             break;

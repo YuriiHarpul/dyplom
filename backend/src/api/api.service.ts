@@ -37,14 +37,8 @@ export class ApiService {
 
   // --- Users ---
   async getUsers(role?: string) {
-    return this.prisma.user.findMany({
-      where: {
-        ...(role ? { role } : {}),
-        NOT: [
-          { email: { startsWith: 'teacher_' } },
-          { email: { startsWith: 'student_' } },
-        ]
-      },
+    const allUsers = await this.prisma.user.findMany({
+      where: role ? { role } : {},
       select: { 
         id: true, name: true, email: true, role: true, group: true, course: true, capacity: true,
         _count: { select: { teacherProjects: true } },
@@ -56,6 +50,12 @@ export class ApiService {
         }
       },
     });
+
+    // Фільтруємо в JS, а не SQL, бо Prisma startsWith генерує LIKE 'teacher_%'
+    // де '_' є SQL wildcard і випадково захоплює 'teacher@cnu.edu.ua'
+    return allUsers.filter(u =>
+      !u.email.startsWith('teacher_') && !u.email.startsWith('student_')
+    );
   }
 
   async changeRole(userId: string, newRole: string) {
@@ -65,18 +65,37 @@ export class ApiService {
     });
   }
 
-  async assignTeacher(studentId: string, teacherId: string, poolId: string) {
-    return this.prisma.project.upsert({
-      where: { studentId_poolId: { studentId, poolId } },
-      update: { teacherId },
-      create: {
-        studentId,
-        teacherId,
-        poolId,
-        title: 'Тему не обрано',
-        status: 'PENDING',
-      },
+  async assignTeacher(studentId: string, teacherId: string, poolId?: string) {
+    // Якщо poolId передано — робимо upsert у конкретному пулі
+    if (poolId) {
+      return this.prisma.project.upsert({
+        where: { studentId_poolId: { studentId, poolId } },
+        update: { teacherId },
+        create: {
+          studentId,
+          teacherId,
+          poolId,
+          title: 'Тему не обрано',
+          status: 'PENDING',
+        },
+      });
+    }
+
+    // Якщо poolId не передано — оновлюємо teacherId у першому знайденому проєкті студента
+    const project = await this.prisma.project.findFirst({
+      where: { studentId },
+      orderBy: { id: 'asc' },
     });
+
+    if (project) {
+      return this.prisma.project.update({
+        where: { id: project.id },
+        data: { teacherId },
+      });
+    }
+
+    // Якщо проєкту взагалі немає — повертаємо помилку
+    throw new BadRequestException('У студента немає жодного проєкту для призначення керівника');
   }
 
   async getProjects(userId: string, role: string) {
