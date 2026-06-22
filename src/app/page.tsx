@@ -28,7 +28,7 @@ const HighlightText = ({ text, query }: { text: string; query: string }) => {
 
   return (
     <>
-      {parts.map((part, i) => 
+      {parts.map((part, i) =>
         part.highlight ? (
           <mark key={i} style={{ backgroundColor: "rgba(46, 125, 50, 0.3)", color: "inherit", borderRadius: "2px", padding: "0 2px" }}>
             {part.text}
@@ -142,7 +142,7 @@ export default function Home() {
               <GraduationCap size={48} color="var(--primary-color)" />
             </div>
           </div>
-          <h1>Моніторинг дипломних проєктів</h1>
+          <h1>Моніторинг проєктів кафедри</h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "1.1rem", maxWidth: "600px", margin: "0 auto" }}>
             Введіть тему роботи або скористайтесь фільтрами для швидкого пошуку проєктів кафедри.
           </p>

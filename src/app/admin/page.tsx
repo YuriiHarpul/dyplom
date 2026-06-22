@@ -25,7 +25,7 @@ export default function AdminPage() {
     const [newPoolName, setNewPoolName] = useState("");
     const [newPoolYear, setNewPoolYear] = useState(new Date().getFullYear());
     const [newPoolSemester, setNewPoolSemester] = useState("1 семестр");
-    const [newPoolWorkType, setNewPoolWorkType] = useState("Курсова робота");
+    const [newPoolWorkType, setNewPoolWorkType] = useState("Дипломна робота");
     const [newPoolPattern, setNewPoolPattern] = useState("");
     const [activePoolId, setActivePoolId] = useState<string | null>(null);
     const [selectedTeacherId, setSelectedTeacherId] = useState("");
@@ -42,6 +42,7 @@ export default function AdminPage() {
     const [showDropdown, setShowDropdown] = useState(false);
     
     const [localCapacities, setLocalCapacities] = useState<Record<string, string>>({});
+    const [deletingPoolId, setDeletingPoolId] = useState<string | null>(null);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -124,7 +125,6 @@ export default function AdminPage() {
     };
 
     const handleDeletePool = async (poolId: string) => {
-        if (!confirm("Ви впевнені, що хочете видалити цей пул?")) return;
         try {
             const res = await fetch(`http://localhost:3001/api/admin/pools/${poolId}`, { method: 'DELETE' });
             if (res.ok) fetchPools();
@@ -504,23 +504,14 @@ export default function AdminPage() {
                                     <input type="text" className="input-control" placeholder="напр. Основний" value={newPoolName} onChange={e => setNewPoolName(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Тип роботи</label>
-                                    <select className="input-control" value={newPoolWorkType} onChange={e => setNewPoolWorkType(e.target.value)}>
-                                        <option value="Курсова робота">Курсова робота</option>
-                                        <option value="Дипломна робота">Дипломна робота</option>
-                                    </select>
-                                </div>
-                                <div>
                                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Рік</label>
                                     <input type="number" className="input-control" value={newPoolYear} onChange={e => setNewPoolYear(parseInt(e.target.value) || new Date().getFullYear())} />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Період</label>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Семестр</label>
                                     <select className="input-control" value={newPoolSemester} onChange={e => setNewPoolSemester(e.target.value)}>
                                         <option value="1 семестр">1 семестр</option>
                                         <option value="2 семестр">2 семестр</option>
-                                        <option value="1 півріччя">1 півріччя</option>
-                                        <option value="2 півріччя">2 півріччя</option>
                                     </select>
                                 </div>
                                 <div>
@@ -576,24 +567,46 @@ export default function AdminPage() {
                                     <div key={pool.id} style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem', background: 'var(--bg-secondary)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                             <div>
-                                                <h4 style={{ margin: 0, fontSize: '1.2rem' }}>{pool.workType} {pool.year} ({pool.semester})</h4>
-                                                <p style={{ margin: '0.3rem 0', color: 'var(--text-secondary)' }}>{pool.name} • Групи: {pool.groupPatterns}</p>
+                                                <h4 style={{ margin: 0, fontSize: '1.2rem' }}>{pool.name} {pool.year} ({pool.semester})</h4>
+                                                <p style={{ margin: '0.3rem 0', color: 'var(--text-secondary)' }}>Групи: {pool.groupPatterns}</p>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                                <button
-                                                    className="btn"
-                                                    style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                                                    onClick={() => { setActivePoolId(activePoolId === pool.id ? null : pool.id); setTeacherSearchInPool(""); }}
-                                                >
-                                                    <Plus size={18} /> Додати викладача
-                                                </button>
-                                                <button
-                                                    className="btn"
-                                                    style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)' }}
-                                                    onClick={() => handleDeletePool(pool.id)}
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
+                                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                {deletingPoolId === pool.id ? (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', padding: '0.3rem 0.6rem', borderRadius: '8px' }}>
+                                                        <span style={{ fontSize: '0.8rem', color: 'var(--danger-color)', fontWeight: 600 }}>Видалити?</span>
+                                                        <button
+                                                            className="btn btn-primary"
+                                                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: 'var(--danger-color)', border: 'none', height: '30px', display: 'flex', alignItems: 'center' }}
+                                                            onClick={() => { handleDeletePool(pool.id); setDeletingPoolId(null); }}
+                                                        >
+                                                            Так
+                                                        </button>
+                                                        <button
+                                                            className="btn"
+                                                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', height: '30px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                                                            onClick={() => setDeletingPoolId(null)}
+                                                        >
+                                                            Ні
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            className="btn"
+                                                            style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                                            onClick={() => { setActivePoolId(activePoolId === pool.id ? null : pool.id); setTeacherSearchInPool(""); }}
+                                                        >
+                                                            <Plus size={18} /> Додати викладача
+                                                        </button>
+                                                        <button
+                                                            className="btn"
+                                                            style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)' }}
+                                                            onClick={() => setDeletingPoolId(pool.id)}
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 
