@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, LogIn, Loader2, UserCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -11,6 +11,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Якщо вже залогований — одразу перенаправити
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        if (user.role === 'ADMIN') router.replace('/admin');
+        else if (user.role === 'TEACHER') router.replace('/teacher');
+        else router.replace('/student');
+      } catch {
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

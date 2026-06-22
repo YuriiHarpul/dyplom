@@ -59,6 +59,14 @@ export default function AdminPage() {
         fetchUsers();
         fetchPools();
         fetchImports();
+
+        // Автооновлення кожні 10 секунд
+        const interval = setInterval(() => {
+            fetchUsers(false);
+            fetchPools(false);
+        }, 10000);
+
+        return () => clearInterval(interval);
     }, []);
 
     const fetchImports = async () => {
@@ -73,8 +81,8 @@ export default function AdminPage() {
         finally { setLoadingImports(false); }
     };
 
-    const fetchUsers = async () => {
-        setLoadingUsers(true);
+    const fetchUsers = async (showLoader = true) => {
+        if (showLoader) setLoadingUsers(true);
         try {
             const res = await fetch('http://localhost:3001/api/users');
             const data = await res.json();
@@ -83,12 +91,12 @@ export default function AdminPage() {
         } catch (e) {
             console.error(e);
         } finally {
-            setLoadingUsers(false);
+            if (showLoader) setLoadingUsers(false);
         }
     };
 
-    const fetchPools = async () => {
-        setLoadingPools(true);
+    const fetchPools = async (showLoader = true) => {
+        if (showLoader) setLoadingPools(true);
         try {
             const res = await fetch('http://localhost:3001/api/admin/pools');
             if (res.ok) {
@@ -98,7 +106,7 @@ export default function AdminPage() {
         } catch (e) {
             console.error(e);
         } finally {
-            setLoadingPools(false);
+            if (showLoader) setLoadingPools(false);
         }
     };
 

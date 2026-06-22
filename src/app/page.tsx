@@ -236,16 +236,20 @@ export default function Home() {
                 className="glass-panel"
                 style={{
                   padding: "1.5rem",
-                  animation: `fadeIn 0.3s ease-out ${index % 10 * 0.05}s forwards`,
+                  animation: `fadeIn 0.3s ease-out ${(index % 10) * 0.05}s forwards`,
                   opacity: 0,
-                  borderLeft: "4px solid var(--primary-color)"
+                  borderLeft: project.item.status === "COMPLETED" ? "4px solid var(--success-color)" : "4px solid var(--primary-color)"
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                   <h4 style={{ fontSize: "1.2rem", color: "var(--text-primary)", maxWidth: "80%" }}>
                     <HighlightText text={project.item.title} query={debouncedQuery} />
                   </h4>
-
+                  {project.item.status === "COMPLETED" && (
+                    <span style={{ background: "rgba(16, 185, 129, 0.1)", color: "var(--success-color)", padding: "0.25rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                      ВИКОНАНО
+                    </span>
+                  )}
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", backgroundColor: "rgba(0,0,0,0.03)", padding: "1rem", borderRadius: "8px" }}>

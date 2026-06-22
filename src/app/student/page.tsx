@@ -31,10 +31,17 @@ export default function StudentDashboard() {
     }
     setUser(parsedUser);
     fetchData(parsedUser.id);
+
+    // Автооновлення кожні 10 секунд (без спінера)
+    const interval = setInterval(() => {
+      fetchData(parsedUser.id, false);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchData = async (userId: string) => {
-    setLoading(true);
+  const fetchData = async (userId: string, showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       const projRes = await fetch(`http://localhost:3001/api/projects?userId=${userId}&role=STUDENT`);
       const projData = await projRes.json();
@@ -46,7 +53,7 @@ export default function StudentDashboard() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
@@ -59,7 +66,8 @@ export default function StudentDashboard() {
   };
 
   useEffect(() => {
-    if (selectedPoolId && !projects.find(p => p.poolId === selectedPoolId)) {
+    const isProject = projects.some(p => p.id === selectedPoolId);
+    if (selectedPoolId && !isProject && !projects.find(p => p.poolId === selectedPoolId)) {
       fetchTeachersInPool(selectedPoolId);
     }
   }, [selectedPoolId, projects]);
@@ -138,6 +146,8 @@ export default function StudentDashboard() {
 
   if (loading) return <div className="container" style={{ padding: '3rem', textAlign: 'center' }}>Завантаження...</div>;
 
+  const completedProjects = projects.filter(p => p.status === 'COMPLETED');
+
   return (
     <div className="container" style={{ paddingTop: '5vh', paddingBottom: '5vh' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -184,6 +194,37 @@ export default function StudentDashboard() {
               </div>
             );
           })}
+
+          {completedProjects.map(project => {
+            const isSelected = selectedPoolId === project.id;
+
+            return (
+              <div
+                key={project.id}
+                onClick={() => setSelectedPoolId(project.id)}
+                style={{
+                  padding: '1.5rem',
+                  borderRadius: '16px',
+                  border: isSelected ? '2px solid var(--success-color)' : '1px solid var(--border-color)',
+                  background: isSelected ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                  boxShadow: isSelected ? '0 8px 24px rgba(16, 185, 129, 0.1)' : 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Виконана робота</span>
+                  <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'var(--success-color)', color: 'white', fontWeight: 600 }}>ВИКОНАНО / АРХІВ</span>
+                </div>
+                <h4 style={{ fontSize: '1.1rem', margin: 0 }}>{project.title}</h4>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Керівник: {project.teacher.name}</div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Деталі обраного завдання */}
@@ -194,7 +235,7 @@ export default function StudentDashboard() {
         ) : (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             {(() => {
-              const project = projects.find(p => p.poolId === selectedPoolId);
+              const project = projects.find(p => p.poolId === selectedPoolId || p.id === selectedPoolId);
               const pool = availablePools.find(p => p.id === selectedPoolId);
 
               if (!project) {
@@ -254,13 +295,20 @@ export default function StudentDashboard() {
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                             <Clock size={16} />
-                            <span>Статус проєкту: <strong>{project.status === 'PENDING' ? 'Очікує підтвердження' : project.status === 'REJECTED' ? 'Відхилено' : 'Затверджено'}</strong></span>
+                            <span>Статус проєкту: <strong>{project.status === 'PENDING' ? 'Очікує підтвердження' : project.status === 'REJECTED' ? 'Відхилено' : project.status === 'COMPLETED' ? 'Виконано / В архіві' : 'Затверджено'}</strong></span>
                           </div>
                           <h3 style={{ fontSize: '1.8rem', color: 'var(--primary-color)', margin: '0.5rem 0' }}>{project.title}</h3>
                           <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Керівник: <strong>{project.teacher.name}</strong></p>
                         </div>
-                        <div style={{ padding: '0.6rem 1.2rem', borderRadius: '999px', background: project.status === 'APPROVED' ? 'rgba(46,125,50,0.1)' : 'rgba(245,158,11,0.1)', color: project.status === 'APPROVED' ? 'var(--success-color)' : '#b45309', fontWeight: 700, fontSize: '0.9rem' }}>
-                          {project.status === 'PENDING' ? 'В ОБРОБЦІ' : project.status === 'REJECTED' ? 'ВІДХИЛЕНО' : 'ЗАТВЕРДЖЕНО'}
+                        <div style={{ 
+                          padding: '0.6rem 1.2rem', 
+                          borderRadius: '999px', 
+                          background: project.status === 'APPROVED' ? 'rgba(46,125,50,0.1)' : project.status === 'COMPLETED' ? 'rgba(59,130,246,0.1)' : 'rgba(245,158,11,0.1)', 
+                          color: project.status === 'APPROVED' ? 'var(--success-color)' : project.status === 'COMPLETED' ? '#3b82f6' : '#b45309', 
+                          fontWeight: 700, 
+                          fontSize: '0.9rem' 
+                        }}>
+                          {project.status === 'PENDING' ? 'В ОБРОБЦІ' : project.status === 'REJECTED' ? 'ВІДХИЛЕНО' : project.status === 'COMPLETED' ? 'ВИКОНАНО' : 'ЗАТВЕРДЖЕНО'}
                         </div>
                       </div>
 
@@ -324,26 +372,28 @@ export default function StudentDashboard() {
                     </div>
 
                     {/* Завантаження документів */}
-                    {project.status === 'APPROVED' && (
+                    {(project.status === 'APPROVED' || project.status === 'COMPLETED') && (
                       <div className="glass-panel" style={{ padding: '2.5rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                           <h3 style={{ margin: 0 }}>Файли роботи (PDF)</h3>
-                          <div>
-                            <input 
-                              type="file" 
-                              id={`file-upload-${project.id}`} 
-                              style={{ display: 'none' }} 
-                              accept=".pdf" 
-                              onChange={(e) => handleFileUpload(e, project.id)} 
-                            />
-                            <button 
-                              className="btn btn-primary" 
-                              onClick={() => document.getElementById(`file-upload-${project.id}`)?.click()}
-                              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                            >
-                              <FileUp size={18} /> Завантажити нову версію
-                            </button>
-                          </div>
+                          {project.status === 'APPROVED' && (
+                            <div>
+                              <input 
+                                type="file" 
+                                id={`file-upload-${project.id}`} 
+                                style={{ display: 'none' }} 
+                                accept=".pdf" 
+                                onChange={(e) => handleFileUpload(e, project.id)} 
+                              />
+                              <button 
+                                className="btn btn-primary" 
+                                onClick={() => document.getElementById(`file-upload-${project.id}`)?.click()}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                              >
+                                <FileUp size={18} /> Завантажити нову версію
+                              </button>
+                            </div>
+                          )}
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -370,7 +420,7 @@ export default function StudentDashboard() {
                     )}
 
                     {/* Прогрес по розділах */}
-                    {project.status === 'APPROVED' && project.chapters && (
+                    {(project.status === 'APPROVED' || project.status === 'COMPLETED') && project.chapters && (
                       <div className="glass-panel" style={{ padding: '2.5rem' }}>
                         <h3 style={{ marginBottom: '1.5rem' }}>Етапи виконання</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -403,7 +453,7 @@ export default function StudentDashboard() {
                                   {chapter.status === 'REWORK' && 'ПОТРЕБУЄ ДООПРАЦЮВАННЯ'}
                                   {chapter.status === 'APPROVED' && 'ЗАТВЕРДЖЕНО'}
                                 </span>
-                                {(chapter.status === 'PENDING' || chapter.status === 'REWORK') && (
+                                {(chapter.status === 'PENDING' || chapter.status === 'REWORK') && project.status === 'APPROVED' && (
                                   <button onClick={() => submitChapter(chapter.id)} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
                                     <Send size={16} style={{ marginRight: '6px' }} /> Надіслати
                                   </button>

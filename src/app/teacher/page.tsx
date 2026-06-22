@@ -13,6 +13,7 @@ export default function TeacherDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+  const [archiveExpanded, setArchiveExpanded] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -27,10 +28,17 @@ export default function TeacherDashboard() {
     }
     setUser(parsedUser);
     fetchData(parsedUser.id);
+
+    // Автооновлення кожні 10 секунд
+    const interval = setInterval(() => {
+      fetchData(parsedUser.id, false);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchData = async (userId: string) => {
-    setLoading(true);
+  const fetchData = async (userId: string, showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       const res = await fetch(`http://localhost:3001/api/projects?userId=${userId}&role=TEACHER`);
       const data = await res.json();
@@ -38,7 +46,7 @@ export default function TeacherDashboard() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
@@ -78,6 +86,7 @@ export default function TeacherDashboard() {
 
   const pendingProjects = projects.filter(p => p.status === 'PENDING');
   const activeProjects = projects.filter(p => p.status === 'APPROVED');
+  const completedProjects = projects.filter(p => p.status === 'COMPLETED');
   
   const getFilteredActive = () => {
     let list = activeProjects.filter(p => {
@@ -96,6 +105,24 @@ export default function TeacherDashboard() {
   };
 
   const filteredActive = getFilteredActive();
+
+  const getFilteredCompleted = () => {
+    let list = completedProjects.filter(p => {
+      const matchesGroup = !groupFilter || (p.student.group && p.student.group.toLowerCase().includes(groupFilter.toLowerCase()));
+      return matchesGroup;
+    });
+
+    if (searchQuery) {
+      list = list
+        .map(p => ({ p, score: calculateSearchScore(`${p.student.name} ${p.title}`, searchQuery) }))
+        .filter(res => res.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(res => res.p);
+    }
+    return list;
+  };
+
+  const filteredCompleted = getFilteredCompleted();
 
   return (
     <div className="container" style={{ paddingTop: '5vh', paddingBottom: '5vh' }}>
@@ -294,6 +321,123 @@ export default function TeacherDashboard() {
             </div>
           )}
         </div>
+
+        {/* Архів / Виконані роботи */}
+        {completedProjects.length > 0 && (
+          <div className="glass-panel" style={{ padding: '2rem' }}>
+            <div 
+              onClick={() => setArchiveExpanded(!archiveExpanded)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+            >
+              <h3 style={{ margin: 0 }}>Архів / Виконані роботи ({completedProjects.length})</h3>
+              {archiveExpanded ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+            </div>
+
+            {archiveExpanded && (
+              <div style={{ marginTop: '1.5rem' }}>
+                {filteredCompleted.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)' }}>Немає виконаних робіт, що відповідають пошуку.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {filteredCompleted.map(p => (
+                      <div key={p.id} style={{ background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', opacity: 0.85 }}>
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedProjectId(expandedProjectId === p.id ? null : p.id);
+                          }}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', cursor: 'pointer', transition: 'background 0.2s', background: expandedProjectId === p.id ? 'rgba(0,0,0,0.02)' : 'transparent' }}
+                        >
+                          <div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Виконано</div>
+                            <h4 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>{p.student.name} {p.student.group ? `(${p.student.group})` : ''}</h4>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', textDecoration: 'line-through' }}>{p.title}</p>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success-color)', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>ВИКОНАНО</span>
+                            {expandedProjectId === p.id ? <ChevronUp size={20} color="var(--text-secondary)" /> : <ChevronDown size={20} color="var(--text-secondary)" />}
+                          </div>
+                        </div>
+
+                        {expandedProjectId === p.id && (
+                          <div style={{ padding: '1.5rem', borderTop: '1px dashed var(--border-color)', background: 'var(--bg-color)' }}>
+                            {/* GitHub Link */}
+                            {p.githubUrl && (
+                              <div style={{ marginBottom: '1.5rem' }}>
+                                <h5 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Репозиторій коду</h5>
+                                <a href={p.githubUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--primary-color)', textDecoration: 'none', fontWeight: 500, transition: 'all 0.2s' }} className="hover-scale">
+                                  <Github size={18} /> Відкрити GitHub
+                                </a>
+                              </div>
+                            )}
+
+                            {/* Публікації */}
+                            {p.requiresPublication && p.publications && (
+                              <div style={{ marginBottom: '1.5rem', padding: '1.5rem', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                <h5 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Публікації:</h5>
+                                <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.02)', borderRadius: '6px', whiteSpace: 'pre-wrap', fontSize: '0.9rem', borderLeft: '3px solid var(--success-color)' }}>
+                                  {p.publications}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Завантажені документи */}
+                            <div style={{ marginBottom: '1.5rem' }}>
+                              <h5 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Завантажені документи</h5>
+                              {(!p.documents || p.documents.length === 0) ? (
+                                <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontStyle: 'italic', background: 'rgba(0,0,0,0.02)', borderRadius: '6px' }}>
+                                  Студент не завантажував файлів.
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                  {p.documents.map((doc: any, idx: number) => (
+                                    <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <FileText size={20} color="var(--primary-color)" />
+                                        <div>
+                                          <div style={{ fontWeight: 500, fontSize: '0.95rem' }}>{doc.fileName}</div>
+                                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                            {new Date(doc.createdAt).toLocaleString('uk-UA')} 
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <a href={`http://localhost:3001${doc.fileUrl}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <FileDown size={16} /> Завантажити
+                                      </a>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Розділи */}
+                            <div>
+                              <h5 style={{ fontSize: '0.9rem', marginBottom: '1rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Прогрес розділів</h5>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
+                                {p.chapters.sort((a: any, b: any) => a.order - b.order).map((c: any) => (
+                                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                    <span style={{ fontWeight: 500 }}>{c.title}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                      {c.status === 'APPROVED' ? (
+                                        <span style={{ fontSize: '0.85rem', color: 'var(--success-color)' }}>Затверджено</span>
+                                      ) : (
+                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{c.status === 'SUBMITTED' ? 'На перевірці' : c.status === 'REWORK' ? 'На доопрацюванні' : 'Не розпочато'}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

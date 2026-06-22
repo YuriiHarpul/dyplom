@@ -249,10 +249,13 @@ export class ApiService {
   }
 
   async deletePool(poolId: string) {
-    // Спочатку відв'язуємо всі проєкти від цього пулу (встановлюємо poolId = null)
+    // Позначаємо всі проєкти в пулі як "виконані" та відв'язуємо їх від пулу
     await this.prisma.project.updateMany({
       where: { poolId },
-      data: { poolId: null },
+      data: { 
+        poolId: null,
+        status: 'COMPLETED'
+      },
     });
 
     return this.prisma.pool.delete({
