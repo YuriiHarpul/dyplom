@@ -14,7 +14,7 @@ export default function LoginPage() {
 
   // Якщо вже залогований — одразу перенаправити
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = sessionStorage.getItem('user');
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
@@ -22,7 +22,7 @@ export default function LoginPage() {
         else if (user.role === 'TEACHER') router.replace('/teacher');
         else router.replace('/student');
       } catch {
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
       }
     }
   }, []);
@@ -46,7 +46,7 @@ export default function LoginPage() {
       const user = await res.json();
 
       // Save to localStorage for demo purposes
-      localStorage.setItem('user', JSON.stringify(user));
+      sessionStorage.setItem('user', JSON.stringify(user));
 
       if (user.role === 'ADMIN') router.push('/admin');
       else if (user.role === 'TEACHER') router.push('/teacher');

@@ -10,13 +10,14 @@ export default function TeacherDashboard() {
   const [user, setUser] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = sessionStorage.getItem('user');
     if (!storedUser) {
       router.push('/login');
       return;
@@ -41,10 +42,13 @@ export default function TeacherDashboard() {
     if (showLoader) setLoading(true);
     try {
       const res = await fetch(`http://localhost:3001/api/projects?userId=${userId}&role=TEACHER`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setProjects(data);
+      setFetchError(false);
     } catch (e) {
-      console.error(e);
+      console.error('fetchData error:', e);
+      setFetchError(true);
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -83,6 +87,12 @@ export default function TeacherDashboard() {
 
 
   if (loading) return <div className="container" style={{ padding: '3rem', textAlign: 'center' }}>Завантаження...</div>;
+  if (fetchError) return (
+    <div className="container" style={{ padding: '3rem', textAlign: 'center' }}>
+      <p style={{ color: 'var(--danger-color)', marginBottom: '1rem' }}>⚠️ Не вдалося зʼєднатися з сервером. Переконайтеся, що backend запущено на порті 3001.</p>
+      <button className="btn btn-primary" onClick={() => user && fetchData(user.id)}>Спробувати знову</button>
+    </div>
+  );
 
   const pendingProjects = projects.filter(p => p.status === 'PENDING');
   const activeProjects = projects.filter(p => p.status === 'APPROVED');
